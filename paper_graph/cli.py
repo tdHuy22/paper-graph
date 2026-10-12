@@ -1,0 +1,151 @@
+"""Dòng lệnh: `python -m paper_graph <lệnh>`.
+
+    extract       BAI.pdf [-o BAI.blocks.json] [--ocr] [--vietpaper DIR]   PDF → các đoạn kèm toạ độ
+    verify-blocks BAI.pdf BAI.blocks.json                                  trích lại, so với blocks đã có
+    check         BAI.graph.json [--blocks F] [--pdf F] [--json] [--strict] kiểm sơ đồ với bài gốc
+
+Mã thoát: 0 đạt, 1 sơ đồ có lỗi (hay có cảnh báo khi --strict), 2 không đọc được input.
+"""
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+from . import blocks as blocks_mod
+from .check import check, parse_graph, render
+from .files import InputError, read_json, sha256_file, sibling, write_json
+from .text import safe
+
+
+def _print_err(msg: str) -> None:
+    for line in str(msg).splitlines() or [""]:
+        print("paper-graph: " + safe(line, 500), file=sys.stderr)
+
+
+def cmd_extract(a) -> int:
+    from .extract import DEFAULT_VIETPAPER, extract  # noqa: PLC0415
+
+    pdf = Path(a.pdf)
+    out = Path(a.output) if a.output else pdf.with_suffix(".blocks.json")
+    if not out.name.endswith(".blocks.json"):
+        raise InputError("file ra phải có đuôi .blocks.json")
+    if not out.parent.resolve().is_dir() or out.is_dir():  # kiểm trước khi trích, khỏi mất công tới 400 trang
+        raise InputError(f"không ghi được {out}: thư mục không có, hoặc tên đó là một thư mục")
+
+    def progress(n, total):
+        print(f"\rtrích tr.{n}/{total}", end="", file=sys.stderr, flush=True)
+
+    a.native = True
+    doc = extract(pdf, Path(a.vietpaper) if a.vietpaper else DEFAULT_VIETPAPER, ocr=a.ocr, lang=a.lang,
+                  max_pages=a.max_pages, progress=progress)
+    print(file=sys.stderr)
+    write_json(out, doc)
+    scans = [p["page"] for p in doc["pages"] if not p["text"]]
+    no_layout = [p["page"] for p in doc["pages"] if not p["layout"]]
+    print(f"{out}: {len(doc['pages'])} trang, {len(doc['blocks'])} đoạn, {len(doc['figures'])} hình/bảng/công thức")
+    if scans:
+        print(f"  {len(scans)} trang scan chưa có chữ (tr.{', '.join(map(str, scans[:10]))}"
+              f"{'…' if len(scans) > 10 else ''}): chạy lại với --ocr")
+    if no_layout:
+        print(f"  {len(no_layout)} trang không có model bố cục: đoạn gom theo khoảng cách, hình không được tách")
+    return 0
+
+
+def cmd_verify_blocks(a) -> int:
+    from .extract import DEFAULT_VIETPAPER, verify  # noqa: PLC0415
+
+    print("đang trích lại để so…", file=sys.stderr)
+    a.native = True
+    diffs = verify(Path(a.pdf), read_json(Path(a.blocks), "blocks"),
+                   Path(a.vietpaper) if a.vietpaper else DEFAULT_VIETPAPER)
+    if not diffs:
+        print(f"{safe(a.blocks, 300)}: khớp bản trích lại từ {safe(a.pdf, 300)}")
+        return 0
+    print(f"{safe(a.blocks, 300)}: {len(diffs)} chỗ khác bản trích lại từ {safe(a.pdf, 300)}")
+    for x in diffs[:30]:
+        print("  " + safe(x, 300))
+    if len(diffs) > 30:
+        print(f"  … và {len(diffs) - 30} chỗ nữa")
+    return 1
+
+
+def cmd_check(a) -> int:
+    gpath = Path(a.graph)
+    doc = read_json(gpath, "sơ đồ")
+    graph, diags = parse_graph(doc)
+    if graph is None:
+        report = check_failed(diags)
+        return finish(report, "?", a)
+    blocks = None
+    bpath = Path(a.blocks) if a.blocks else (sibling(gpath, graph.blocks_file, ".blocks.json")
+                                              if graph.blocks_file else None)
+    if bpath is not None:
+        blocks, errs = blocks_mod.parse(read_json(bpath, "blocks"))
+        if errs:
+            raise InputError(f"{bpath} hỏng:\n" + "\n".join(errs[:20]))
+    pdf_sha = sha256_file(Path(a.pdf)) if a.pdf else None
+    report = check(graph, blocks, pdf_sha, diags)
+    return finish(report, graph.title, a)
+
+
+def check_failed(diags):
+    from .check import Report  # noqa: PLC0415
+
+    return Report(list(diags), {"nodes": 0, "tiers": 0, "depth": 0, "anchors": 0, "anchors_ok": 0,
+                                "anchors_unverified": 0})
+
+
+def finish(report, title: str, a) -> int:
+    if a.json:
+        print(json.dumps(report.to_json(a.strict), ensure_ascii=False, indent=1))
+    else:
+        print(render(report, title))
+    return 0 if report.ok(a.strict) else 1
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="paper-graph", description="Sơ đồ nhiều tầng cho bài báo, mỗi ô neo về bài gốc")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    e = sub.add_parser("extract", help="PDF → các đoạn kèm toạ độ (chạy bằng Python của VietPaper)")
+    e.add_argument("pdf")
+    e.add_argument("-o", "--output", help="mặc định: cạnh PDF, đuôi .blocks.json")
+    e.add_argument("--ocr", action="store_true", help="OCR trang scan bằng RapidOCR")
+    e.add_argument("--lang", default="eng", help="ngôn ngữ OCR (mặc định eng)")
+    e.add_argument("--vietpaper", help="thư mục pdf-translator (mặc định ../pdf-translator)")
+    e.add_argument("--max-pages", type=int, default=400)
+    e.set_defaults(fn=cmd_extract)
+
+    v = sub.add_parser("verify-blocks", help="trích lại PDF và so với blocks.json (bắt blocks bị sửa tay)")
+    v.add_argument("pdf")
+    v.add_argument("blocks")
+    v.add_argument("--vietpaper", help="thư mục pdf-translator (mặc định ../pdf-translator)")
+    v.set_defaults(fn=cmd_verify_blocks)
+
+    c = sub.add_parser("check", help="kiểm sơ đồ: dạng file, neo về bài gốc, giới hạn tầng")
+    c.add_argument("graph")
+    c.add_argument("--blocks", help="blocks.json để kiểm neo (mặc định: paper.blocks trong sơ đồ)")
+    c.add_argument("--pdf", help="PDF gốc: băm lại để chắc sơ đồ nói về đúng file này")
+    c.add_argument("--json", action="store_true", help="in kết quả dạng JSON")
+    c.add_argument("--strict", action="store_true", help="cảnh báo cũng tính là trượt")
+    c.set_defaults(fn=cmd_check)
+
+    a = p.parse_args(argv)
+    try:
+        code = a.fn(a)
+    except InputError as err:
+        _print_err(err)
+        code = 2
+    except OSError as err:  # file thiếu, là thư mục, không ghi được
+        _print_err(f"{err.filename or ''}: {err.strerror or err}")
+        code = 2
+    except KeyboardInterrupt:
+        code = 130
+    if getattr(a, "native", False) and argv is None:
+        # Đã nạp onnxruntime và PyMuPDF: thoát thẳng sau khi đẩy hết chữ ra, bỏ bước dọn dẹp thư viện C++ lúc tắt
+        # (xem extract.release). Mọi file đã ghi xong (ghi nguyên tử) trước dòng này.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
+    return code

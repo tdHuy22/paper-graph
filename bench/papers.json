@@ -1,0 +1,11 @@
+{
+ "_note": "Bài dùng cho bộ đo. PDF nằm ở thư mục data của VietPaper (không đưa vào git); sha256 ghim đúng bản đã làm đáp án.",
+ "papers": [
+  {"name": "attention", "pdf": "../pdf-translator/data/attention-is-all-you-need.pdf",
+   "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"},
+  {"name": "bert", "pdf": "../pdf-translator/data/bert.pdf",
+   "sha256": "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"},
+  {"name": "datasentinel", "pdf": "../pdf-translator/data/datasentinel.pdf",
+   "sha256": "37808ff3f1129a9acf8847e9bc1b32233ee3507eff57bde154bb4ebf3dfa2032"}
+ ]
+}

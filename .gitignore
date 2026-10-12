@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+.venv/
+.tmp/
+# chữ toàn văn của bài báo: tạo lại bằng bench/prepare.py, không đưa vào git
+*.blocks.json
