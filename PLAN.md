@@ -72,11 +72,20 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - **Luật chặn quyền cứng** (F3 của review, `.claude/settings.json` với `permissions.deny` cho mạng và lệnh tải): bạn
   chọn chưa thêm (2026-10-13, "chỉ commit thôi"). TM-6 vẫn chỉ dựa vào chỉ dẫn trong skill và lời nhắc của `read`.
 - Phiên làm việc đã chuyển sang thư mục project (2026-10-13).
+- **Mốc 2, việc 3.3** (2026-10-13, xong, chưa commit). Bài thứ tư RoFormer (`roformer-rope.pdf`, nặng công thức) vào
+  `bench/papers.json`; đáp án tay `bench/papers/roformer/roformer.gold.json` 14 ý bắt buộc, 9 tuỳ chọn, viết trước khi
+  xem sơ đồ của skill (sửa một lần sau lượt 4, ghi trong docs/bench.md). Lượt đo 3, 3 subagent Opus trên 3 bài sạch
+  (`.tmp/dung-so-do-workspace/iteration-3/`): BERT 10/10, DataSentinel 13/13, RoFormer 14/14, cả ba 0 lỗi; độ phủ chạm
+  trần, docs/bench.md ghi vì sao cần đáp án dạng khác. Sửa theo góp ý của agent: `read` in chữ công thức trong mạch
+  đoạn, đúng cột; SKILL.md sửa câu sai "công thức không có chữ", bỏ `--strict` ở bước 5 (PG220 vẫn phải hết), thêm
+  hướng dẫn `strength`, chữ và bảng lệch số, ô con dưới `limit`, ô suy luận vẫn neo, số mũ âm; `safe()` thoát
+  U+2028/2029. Lượt 4 (RoFormer, skill mới): 44 ô, 102/102 neo, 0 lỗi 0 cảnh báo, phủ 14/14. Cổng chốt việc: rủi ro
+  vừa, reviewer sonnet tìm 1 vừa (miễn kiểm dãy tên "Bảng 1 và 41 điểm" làm số bịa lọt PG220, đã gỡ, test ngược) và 2
+  thấp (đã sửa trong SKILL.md). Biên nhận: 115 test đạt; `bench/score.py` lượt 3, 4 đạt.
 
 ### Việc tiếp theo
 
-1. Mốc 2, việc 3.3: thêm một bài thứ tư ngoài ví dụ của skill (vd. RoFormer hay RAG trong `pdf-translator/data/`), làm
-   đáp án tay, đo skill trên 3 bài sạch.
+1. Commit việc 3.3 khi bạn bảo.
 2. Mốc 3: trình xem HTML tự chứa (đọc `*.graph.json`, tầng đầu, bấm mở tầng dưới, thẻ chi tiết, ảnh cắt từ bài).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
@@ -122,7 +131,11 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - [x] Skill Claude Code dựng `*.graph.json` từ đoạn và bảng thuật ngữ, chạy bộ
   kiểm, sửa tới khi đạt. (`.claude/skills/dung-so-do/`, 2026-10-12)
 - [x] Đo trên bộ đo: 100% neo hợp lệ, độ phủ ô then chốt. (BERT 10/10, DataSentinel 12/13; `bench/score.py`)
-- [ ] Thêm bài thứ tư ngoài ví dụ của skill (RoFormer hay RAG), làm đáp án tay, đo skill trên 3 bài sạch.
+- [x] Thêm bài thứ tư ngoài ví dụ của skill (RoFormer hay RAG), làm đáp án tay, đo skill trên 3 bài sạch. (RoFormer;
+  lượt 3: BERT 10/10, DataSentinel 13/13, RoFormer 14/14; 2026-10-13)
+- [ ] Bộ đo hết chạm trần: thêm vào đáp án danh sách chỗ bài tự lệch và mức `strength` mong đợi cho các cạnh chính,
+  để đo thứ mà độ phủ không đo (lượt 3, 4 đều phủ 100%).
+- [ ] `read --render <id>`: cắt hình, bảng ra ảnh để agent nhìn được hình dạng đường cong (chữ trích chỉ có vạch trục).
 
 ### Mốc 3: trình xem
 

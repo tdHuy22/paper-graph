@@ -40,17 +40,21 @@ def render(blocks: Blocks, name: str, title: str, pages: list[int], everything: 
         if info.get("text") is False:
             head += " · ẢNH SCAN, CHƯA CÓ CHỮ: chạy lại extract với --ocr"
         out.append(head + " ══")
-        for b in blocks.blocks.values():
-            if b.page != p:
-                continue
+        page_blocks = [b for b in blocks.blocks.values() if b.page == p]
+        width = info.get("width") or max((b.bbox[2] for b in page_blocks), default=0)
+        after = _place_formulas(page_blocks, [f for f in blocks.figures.values()
+                                              if f["page"] == p and f["kind"] == "formula"], width)
+        out.extend(_formula_line(f) for f in after.get(None, []))
+        for b in page_blocks:
             if not everything and b.label in SKIP_BY_DEFAULT:
                 skipped += 1
-                continue
-            out.append(f"[{b.id} · {safe(b.label, 40)}] {safe(b.text, 20000)}")
+            else:
+                out.append(f"[{b.id} · {safe(b.label, 40)}] {safe(b.text, 20000)}")
+            out.extend(_formula_line(f) for f in after.get(b.id, []))
         out.append("")
-    figs = [f for f in blocks.figures.values() if f["page"] in want]
+    figs = [f for f in blocks.figures.values() if f["page"] in want and f["kind"] != "formula"]
     if figs:
-        out.append("══ hình, bảng, công thức (id dùng cho trường `figure` của ô) ══")
+        out.append("══ hình, bảng (id dùng cho trường `figure` của ô; công thức đã in ngay trong mạch đoạn) ══")
         for f in figs:
             cap = f.get("caption")
             cap_text = blocks.blocks[cap].text if cap in blocks.blocks else ""
@@ -65,6 +69,34 @@ def render(blocks: Blocks, name: str, title: str, pages: list[int], everything: 
         out.append(f"(đã bỏ {skipped} đoạn: tài liệu tham khảo, đầu trang, chân trang, ô bảng; thêm --all để xem)")
     out.append("══ HẾT CHỮ CỦA BÀI ══")
     return "\n".join(out)
+
+
+def _place_formulas(page_blocks, formulas, width: float) -> dict:
+    """Đặt mỗi công thức ngay sau đoạn nằm trên nó trong cùng cột (đoạn có đáy thấp nhất mà vẫn ở trên đỉnh công
+    thức), để agent thấy công thức giữa đúng hai câu văn quanh nó. Công thức vắt qua giữa trang thì mọi đoạn đều là
+    ứng viên; công thức nằm hẳn ở nửa trái (phải) chỉ xét đoạn bắt đầu ở nửa trái (kết thúc ở nửa phải), để bài hai
+    cột không nhảy sang cột kia. Không có đoạn nào ở trên thì đặt ở đầu trang (khoá None)."""
+    mid = width / 2
+    after: dict = {}
+    for f in formulas:
+        x0, y0, x1, _ = f["bbox"]
+        if x1 <= mid:
+            col = [b for b in page_blocks if b.bbox[0] < mid]
+        elif x0 >= mid:
+            col = [b for b in page_blocks if b.bbox[2] > mid]
+        else:
+            col = page_blocks
+        above = [b for b in col if b.bbox[3] <= y0 + 2]
+        key = max(above, key=lambda b: b.bbox[3]).id if above else None
+        after.setdefault(key, []).append(f)
+    return after
+
+
+def _formula_line(f: dict) -> str:
+    text = (f.get("text") or "").strip()
+    if not text:
+        return f"[{f['id']} · công thức, chỉ có ảnh]"
+    return f"[{f['id']} · công thức] {safe(text, 2000)}"
 
 
 def find(blocks: Blocks, phrase: str) -> str:

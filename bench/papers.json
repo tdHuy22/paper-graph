@@ -6,6 +6,8 @@
   {"name": "bert", "pdf": "../pdf-translator/data/bert.pdf",
    "sha256": "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"},
   {"name": "datasentinel", "pdf": "../pdf-translator/data/datasentinel.pdf",
-   "sha256": "37808ff3f1129a9acf8847e9bc1b32233ee3507eff57bde154bb4ebf3dfa2032"}
+   "sha256": "37808ff3f1129a9acf8847e9bc1b32233ee3507eff57bde154bb4ebf3dfa2032"},
+  {"name": "roformer", "pdf": "../pdf-translator/data/roformer-rope.pdf",
+   "sha256": "e9a481fbe1c8a20b7b1fa566b13102a1896c7829fa9a8b4c80528452a5ddaf79"}
  ]
 }

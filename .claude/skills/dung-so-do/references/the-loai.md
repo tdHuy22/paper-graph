@@ -20,3 +20,5 @@ Ghi chú:
 - Bài bảo mật: ô `context` cho mô hình đe dọa thường quan trọng chỉ sau `idea`. Hỏi: kẻ tấn công được biết gì, không
   được biết gì, và nếu giả định đó sai thì cách phòng thủ còn đứng không.
 - Bài ngắn (hội thảo 4 trang, bài hệ thống 2 trang) có khi chỉ cần tầng đầu và một tầng dưới cho `result`.
+- Bài phương pháp có mục nền dài điểm lại các cách cũ (nhiều công thức của cách cũ): một ô `context` ở tầng đầu, mở
+  2–4 ô cho các họ cách cũ, mỗi ô nói chúng khác cách mới ở đâu. Nền ngắn thì để trong `explain` của `problem`.

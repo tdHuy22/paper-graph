@@ -2,7 +2,7 @@
 
 Đọc bài báo bằng mắt trước, bằng chữ sau.
 
-Mỗi bài báo thành một sơ đồ nhiều tầng: tầng đầu chỉ 5–9 ô (vấn đề, ý then
+Mỗi bài báo thành một sơ đồ nhiều tầng: tầng đầu chỉ 5–7 ô (vấn đề, ý then
 chốt, phương pháp, kết quả, giới hạn), bấm một ô thì mở ra tầng dưới (các bước
 của phương pháp, tuyên bố nối với bảng hay hình làm bằng chứng, các khái niệm).
 Nhãn bằng tiếng Việt, kèm thuật ngữ gốc. Mỗi ô **neo về đúng câu trong bài**:
@@ -62,7 +62,7 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 [docs/format.md](docs/format.md); bộ đo và đáp án tay ở [docs/bench.md](docs/bench.md).
 
 ```bash
-../pdf-translator/.venv/bin/python bench/prepare.py                      # trích ba bài của bộ đo
+../pdf-translator/.venv/bin/python bench/prepare.py                      # trích bốn bài của bộ đo
 ../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .    # 112 test
 ```
 

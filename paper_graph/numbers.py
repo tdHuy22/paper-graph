@@ -14,18 +14,20 @@ Phía bài đọc kiểu Anh, bỏ số trích dẫn ([5], [11, 12]) và số d�
 khoảng (0.1-0.4), phân vị (p95).
 
 Số chỉ tên trong ô không tính: Bảng 2, Hình 1, §3.1, Eq.(4), P100, GPT-4, LLaMA3-8B, 8x7B; và số nguyên ngay sau
-"lớp/bước/vòng/nhóm/…" (lớp 5) trừ khi là định lượng ("mỗi lớp 0,3", "mỗi head 64 chiều").
+"lớp/bước/vòng/nhóm/…" (lớp 5) trừ khi là định lượng ("mỗi lớp 0,3", "mỗi head 64 chiều"). Chỉ số đứng ngay sau từ chỉ
+tên mới là tên: "Bảng 1–4", "Bảng 1 và 41 điểm" thì số sau vẫn bị kiểm (dãy tên viết lặp từ: "Bảng 1 tới Bảng 4"), vì
+miễn kiểm cả dãy thì số bịa lọt qua ("Bảng 3 và 12 baseline").
 """
 import re
 
 _NUM = re.compile(r"(\d+(?:\.\d+)?[eE][-−+]?\d+|\d+(?:[.,]\d+)*)")
 _SCI = re.compile(r"\d+(?:\.\d+)?[eE][-+]?\d+")
 # Từ đứng trước luôn biến số thành tên: Bảng 2, §3.1
-_STRONG = re.compile(
+_NAME_WORD = (
     r"(?:§|\b(?:bảng|hình|mục|chương|phụ lục|thuật toán|định lý|bổ đề|công thức|phương trình|dòng|trang|tr\.|cột|"
-    r"table|tab\.|figure|fig\.|eq\.|eq|equation|section|sec\.|algorithm|alg\.|theorem|lemma|appendix|line|row))"
-    r"\s*\(?\s*$",
-    re.IGNORECASE)
+    r"tables?|tabs?\.|figures?|figs?\.|eqs?\.|eqs?|equations?|sections?|secs?\.|algorithms?|algs?\.|theorems?|"
+    r"lemmas?|appendix|appendices|lines?|rows?))")
+_STRONG = re.compile(_NAME_WORD + r"\s*\(?\s*$", re.IGNORECASE)
 # Từ đứng trước chỉ biến SỐ NGUYÊN thành tên (lớp 5, bước 2), và không khi có "mỗi/each/per" trước nó (định lượng)
 _WEAK = re.compile(
     r"(?:(mỗi|từng|each|per)\s+)?\b(?:phần|bước|nhóm|giai đoạn|vòng|lớp|phiên bản|version|stage|phase|round|layer|"

@@ -91,7 +91,8 @@ def word_count(s: str) -> int:
 
 
 # Ký tự điều khiển C0, DEL, C1, và ký tự định hướng Unicode (đảo chiều chữ, cách ly hướng, đánh dấu hướng)
-_UNSAFE = re.compile("[\x00-\x1f\x7f-\x9f؜‎‏‪-‮⁦-⁩]")
+# U+2028/2029 (ngăn dòng, ngăn đoạn Unicode): có công cụ hiện chúng thành xuống dòng, đủ để giả một dòng `[id]` mới
+_UNSAFE = re.compile("[\x00-\x1f\x7f-\x9f؜‎‏‪-‮⁦-⁩\u2028\u2029]")
 
 
 def safe(s: object, limit: int = 160) -> str:
