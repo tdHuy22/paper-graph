@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 
 from . import model as m
 from .blocks import Blocks
+from .numbers import missing as missing_numbers
 from .text import safe, squash, word_count
 
 MAX_PER_TIER = 9
@@ -274,7 +275,7 @@ def parse_graph(doc) -> tuple[m.Graph | None, list[Diag]]:
 # ---------------------------------------------------------------------------------------------------- kiểm
 
 def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
-          parse_diags: list[Diag] | None = None) -> Report:
+          parse_diags: list[Diag] | None = None, base: m.Graph | None = None) -> Report:
     d = _Diags(parse_diags or [])
     nodes = graph.nodes
 
@@ -305,9 +306,9 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
         while cur.id not in depth and cur.parent is not None:
             chain.append(cur)
             cur = nodes[cur.parent]
-        base = depth.setdefault(cur.id, 0)  # chưa có trong depth thì cur là ô tầng đầu
+        top = depth.setdefault(cur.id, 0)  # chưa có trong depth thì cur là ô tầng đầu
         for k, x in enumerate(reversed(chain), 1):
-            depth[x.id] = base + k
+            depth[x.id] = top + k
 
     tiers: dict[str | None, list[m.Node]] = defaultdict(list)
     for n in nodes.values():
@@ -395,6 +396,7 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
         blocks = None  # blocks của bài khác: đối chiếu neo hay hình với nó chỉ sinh lỗi giả
 
     anchors = AnchorChecker(d, blocks, stats)
+    sources: dict[str, str] = {}  # chữ bài mà mỗi ô dựa vào: đoạn được neo, chú thích và chữ của hình
     for n in nodes.values():
         where = f"ô {n.id}"
         if not n.anchors:
@@ -405,11 +407,88 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
                 d.warn("PG208", where, "ô suy luận không neo vào tiền đề nào trong bài")
         if n.figure is not None and blocks is not None and n.figure not in blocks.figures:
             d.err("PG207", where, f"hình {n.figure} không có trong blocks.json")
-        anchors.check(where, n.anchors)
+        sources[n.id] = _sources(n, anchors.check(where, n.anchors), blocks)
+        if blocks is not None:
+            _numbers(d, where, f"{n.label}\n{n.term}\n{n.explain}", sources[n.id])
     for e in graph.edges:
-        anchors.check(f"cạnh {e.src}→{e.dst}", e.anchors)
+        hit = anchors.check(f"cạnh {e.src}→{e.dst}", e.anchors)
+        if blocks is not None and e.label:
+            # nhãn cạnh nói về quan hệ giữa hai ô: số của nó phải có trong chữ bài của một trong hai đầu
+            own = "\n".join(blocks.blocks[b].text for b in hit)
+            _numbers(d, f"cạnh {e.src}→{e.dst}", e.label,
+                     "\n".join([own, sources.get(e.src, ""), sources.get(e.dst, "")]))
+    if blocks is not None:
+        for g in graph.groups:
+            # nhãn nhóm tóm các thành viên trong ngữ cảnh ô cha ("Encoder · lặp 6 lần" dựa vào ô method)
+            ctx = [sources.get(x, "") for x in g.members] + [sources.get(g.parent, "") if g.parent else ""]
+            _numbers(d, f"nhóm {g.id}", g.label, "\n".join(ctx))
+    if base is not None:
+        _against_base(d, graph, base)
 
     return Report(list(d), stats)
+
+
+def _sources(n: m.Node, hit: set[str], blocks: Blocks | None) -> str:
+    if blocks is None:
+        return ""
+    texts = [blocks.blocks[b].text for b in sorted(hit)]
+    fig = blocks.figures.get(n.figure) if n.figure else None
+    if fig:
+        texts.append(fig.get("text") or "")
+        if fig.get("caption") in blocks.blocks:
+            texts.append(blocks.blocks[fig["caption"]].text)
+    return "\n".join(texts)
+
+
+def _numbers(d: _Diags, where: str, text: str, source: str) -> None:
+    """PG220 (TM-7): số trong chữ của ô (nhãn, thuật ngữ, giải thích), nhãn cạnh hay nhãn nhóm phải có trong chữ bài
+    mà nó dựa vào. Ô không có neo hợp lệ thì mọi số của nó đều bị báo."""
+    lost = missing_numbers(text, source)
+    if lost:
+        d.warn("PG220", where, "số không có trong chữ bài mà nó dựa vào: " + ", ".join(lost),
+               "thêm neo vào câu có số đó, hay viết đúng số như trong bài")
+
+
+def _against_base(d: _Diags, graph: m.Graph, base: m.Graph) -> None:
+    """PG401/PG402 (TM-8): ô người dùng đã khoá phải còn nguyên khi dựng lại; ô đã duyệt bị đổi thì báo."""
+    for old in base.nodes.values():
+        if old.status not in ("locked", "accepted"):
+            continue
+        new = graph.nodes.get(old.id)
+        if new is None:
+            changed = ["bị xoá"]
+        else:
+            changed = [f for f in ("parent", "kind", "label", "term", "explain", "anchors", "basis", "figure", "status")
+                       if getattr(old, f) != getattr(new, f)]
+        if old.status == "locked" and new is not None:
+            changed += _links_changed(old.id, graph, base)
+        if not changed:
+            continue
+        what = ", ".join(changed)
+        if old.status == "locked":
+            d.err("PG401", f"ô {old.id}", f"ô bạn đã khoá bị đổi khi dựng lại: {what}",
+                  "giữ nguyên ô locked; muốn đổi thì người dùng mở khoá trước")
+        else:
+            d.warn("PG402", f"ô {old.id}", f"ô đã duyệt (accepted) bị đổi: {what}", "nêu lý do trong báo cáo dựng")
+
+
+def _links_changed(nid: str, graph: m.Graph, base: m.Graph) -> list[str]:
+    """Cạnh giữa hai ô cùng locked và nhóm chứa ô locked cũng thuộc phần người dùng đã khoá."""
+    locked = {x.id for x in base.nodes.values() if x.status == "locked"}
+
+    def edges(g: m.Graph) -> list:  # danh sách có thứ tự, giữ cả cạnh trùng cặp ô
+        return sorted(repr((e.src, e.dst, e.kind, e.label, e.strength, e.anchors)) for e in g.edges
+                      if nid in (e.src, e.dst) and e.src in locked and e.dst in locked)
+
+    def groups(g: m.Graph) -> dict:
+        return {x.id: (x.label, x.parent, sorted(x.members)) for x in g.groups if nid in x.members}
+
+    out = []
+    if edges(base) != edges(graph):
+        out.append("cạnh nối với ô locked khác")
+    if groups(base) != groups(graph):
+        out.append("nhóm")
+    return out
 
 
 class AnchorChecker:
@@ -419,8 +498,10 @@ class AnchorChecker:
         self.d, self.blocks, self.stats = d, blocks, stats
         self.closest_left = MAX_CLOSEST
 
-    def check(self, where: str, anchors: list[m.Anchor]) -> None:
+    def check(self, where: str, anchors: list[m.Anchor]) -> set[str]:
+        """Kiểm các neo của một ô hay cạnh; trả id các đoạn mà neo hợp lệ rơi vào."""
         d, blocks, stats = self.d, self.blocks, self.stats
+        found: set[str] = set()
         for k, a in enumerate(anchors, 1):
             w = f"{where} · neo {k}"
             stats["anchors"] += 1
@@ -455,6 +536,8 @@ class AnchorChecker:
                       f"nằm trong {', '.join(sorted({b for h in hits for b in h.blocks}))}")
                 continue
             stats["anchors_ok"] += 1
+            found.update(b for h in hits for b in h.blocks)
+        return found
 
     def _not_found(self, w: str, a: m.Anchor, q: str) -> None:
         if self.closest_left <= 0:

@@ -22,6 +22,7 @@ MAX_PDF_BYTES = 150 * 1024 * 1024
 MAX_PAGES = 400
 DEFAULT_VIETPAPER = Path(__file__).resolve().parents[2] / "pdf-translator"
 FIGURE_LABELS = {"image": "image", "chart": "chart", "table": "table", "display_formula": "formula"}
+FIGURE_TEXT_MAX = 4000  # ký tự chữ giữ lại của mỗi vùng hình/bảng
 CAPTION_GAP = 60.0  # pt: chú thích cách hình xa hơn thế thì không coi là chú thích của nó
 _TAG = re.compile(r"</?[bi]>")
 
@@ -103,7 +104,7 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
             blocks.append({"id": f"p{n}-b{k}", "page": n, "bbox": _box(b["bbox"]),
                            "label": b.get("label") or "text", "text": text})
         out["blocks"] += blocks
-        out["figures"] += figures(n, regions or [], blocks)
+        out["figures"] += figures(n, regions or [], blocks, page)
     release(app)
     return out
 
@@ -183,9 +184,10 @@ def plain_text(app, b: dict, chars: dict) -> str:
     return app.PLACEHOLDER.sub(put, text)
 
 
-def figures(n: int, regions: list[dict], blocks: list[dict]) -> list[dict]:
+def figures(n: int, regions: list[dict], blocks: list[dict], page=None) -> list[dict]:
     """Vùng hình, biểu đồ, bảng, công thức đứng riêng của trang, kèm chú thích gần nhất (khối `figure_title` chồng
-    theo chiều ngang, cách không quá CAPTION_GAP)."""
+    theo chiều ngang, cách không quá CAPTION_GAP) và chữ in trong vùng. Chữ trong vùng cần cho bảng: ô toàn số không
+    vào blocks (bộ gom đoạn của VietPaper bỏ chúng vì không cần dịch), mà số liệu của bảng là thứ ô "bằng chứng" dẫn."""
     caps = [b for b in blocks if b["label"] == "figure_title"]
     out, taken = [], set()
     for g in regions:
@@ -194,6 +196,10 @@ def figures(n: int, regions: list[dict], blocks: list[dict]) -> list[dict]:
             continue
         box = _box(g["bbox"])
         fig = {"id": f"p{n}-f{len(out) + 1}", "page": n, "bbox": box, "kind": kind}
+        if page is not None:
+            text = " ".join(page.get_text("text", clip=box).split())[:FIGURE_TEXT_MAX]
+            if text:
+                fig["text"] = text
         if kind != "formula":
             best = None
             for c in caps:

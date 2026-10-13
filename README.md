@@ -33,7 +33,16 @@ python3 -m paper_graph check bai.graph.json --pdf bai.pdf --json --strict
 
 # 3. Chắc blocks.json đúng là trích từ PDF này, không bị sửa tay (`--pdf` ở trên chỉ so mã băm)
 ../pdf-translator/.venv/bin/python -m paper_graph verify-blocks bai.pdf bai.blocks.json
+
+# Đọc bài theo trang, mỗi đoạn kèm id, để chép câu trích; tìm một cụm ở trang nào
+python3 -m paper_graph read bai.blocks.json --pages 1-5
+python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
 ```
+
+Dựng sơ đồ: trong repo này, nhờ Claude Code "dựng sơ đồ cho bài X". Skill
+[dung-so-do](.claude/skills/dung-so-do/SKILL.md) đọc bài bằng `read`, viết `bai.graph.json`, chạy `check` và sửa tới khi
+đạt. Mỗi con số trong ô phải có trong đoạn được neo (PG220); ô bạn đã khoá (`locked`) không bị dựng lại ghi đè
+(`check --base`, PG401).
 
 ```
 sơ đồ «Attention Is All You Need» · 21 ô, 3 tầng, sâu 2 · neo: 25/25 có thật
@@ -54,7 +63,7 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 
 ```bash
 ../pdf-translator/.venv/bin/python bench/prepare.py                      # trích ba bài của bộ đo
-../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .    # 81 test
+../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .    # 112 test
 ```
 
 ## Trạng thái

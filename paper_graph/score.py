@@ -1,0 +1,153 @@
+"""Chấm một sơ đồ theo đáp án tay của bộ đo (luật ở docs/bench.md).
+
+Một ô **khớp** một ý khi loại ô nằm trong `kinds` của ý, và hoặc một neo của ô rơi vào cùng đoạn với một neo của ý,
+hoặc nhãn/thuật ngữ/giải thích của ô chứa một trong `terms` của ý. Từ đó:
+    độ phủ      ý bắt buộc có ít nhất một ô khớp
+    đúng tầng   ý bắt buộc có ô khớp nằm đúng `tier` (top: tầng đầu; under:X: trong cây con của ô khớp ý X)
+    quan hệ     hai ô khớp hai đầu nối nhau trong cùng tầng, trực tiếp hay qua một ô ở giữa (vấn đề → ý → cách làm),
+                hay, khi `ancestor_ok`, ô này nằm trong cây con của ô kia
+"""
+import re
+from dataclasses import dataclass, field
+
+from . import model as m
+from .blocks import Blocks
+from .check import MIN_QUOTE_CHARS, MIN_QUOTE_WORDS
+from .gold import Gold
+from .text import squash, word_count
+
+
+@dataclass
+class ItemResult:
+    id: str
+    must: bool
+    matched: list[str]
+    tier_ok: bool
+    how: str  # "đoạn", "thuật ngữ", hay "" khi không khớp
+
+
+@dataclass
+class Score:
+    items: list[ItemResult]
+    relations: list[tuple[str, str, bool]]
+    extra: list[str] = field(default_factory=list)  # ô tầng đầu không khớp ý nào (có thể là ý hay ngoài đáp án)
+
+    def _must(self) -> list[ItemResult]:
+        return [i for i in self.items if i.must]
+
+    @property
+    def coverage(self) -> float:
+        must = self._must()
+        return sum(bool(i.matched) for i in must) / len(must) if must else 1.0
+
+    @property
+    def tier(self) -> float:
+        must = self._must()
+        return sum(i.tier_ok for i in must) / len(must) if must else 1.0
+
+    @property
+    def relation_rate(self) -> float:
+        return sum(ok for *_, ok in self.relations) / len(self.relations) if self.relations else 1.0
+
+    def summary(self) -> dict:
+        must = self._must()
+        return {"coverage": round(self.coverage, 3), "covered": sum(bool(i.matched) for i in must), "must": len(must),
+                "tier": round(self.tier, 3), "relations": round(self.relation_rate, 3),
+                "optional_covered": sum(bool(i.matched) for i in self.items if not i.must),
+                "optional": sum(not i.must for i in self.items)}
+
+
+def _blocks_of(anchors: list[m.Anchor], blocks: Blocks) -> set[str]:
+    out: set[str] = set()
+    for a in anchors:
+        # neo quá ngắn khớp ở đâu cũng được (PG202): không cho nó "khớp đoạn" với đáp án
+        if word_count(a.quote) < MIN_QUOTE_WORDS or len(squash(a.quote)) < MIN_QUOTE_CHARS:
+            continue
+        if a.page in blocks.pages:
+            for h in blocks.find_all(squash(a.quote), a.page):
+                out.update(h.blocks)
+    return out
+
+
+def _has_term(text: str, term: str) -> bool:
+    t = term.lower().strip()
+    return bool(t) and re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) is not None
+
+
+def score(graph: m.Graph, gold: Gold, blocks: Blocks) -> Score:
+    nodes = graph.nodes
+    node_blocks = {n.id: _blocks_of(n.anchors, blocks) for n in nodes.values()}
+    node_text = {n.id: f"{n.label}\n{n.term}\n{n.explain}".lower() for n in nodes.values()}
+
+    def ancestors(nid: str) -> set[str]:
+        seen, cur = set(), nodes[nid].parent
+        while cur is not None and cur in nodes and cur not in seen:
+            seen.add(cur)
+            cur = nodes[cur].parent
+        return seen
+
+    matches: dict[str, dict[str, str]] = {}  # ý → {ô: cách khớp}
+    for it in gold.items.values():
+        gold_blocks = _blocks_of(it.anchors, blocks)
+        found: dict[str, str] = {}
+        for n in nodes.values():
+            if n.kind not in it.kinds:
+                continue
+            if node_blocks[n.id] & gold_blocks:
+                found[n.id] = "đoạn"
+            elif any(_has_term(node_text[n.id], t) for t in it.terms):
+                found[n.id] = "thuật ngữ"
+        matches[it.id] = found
+
+    results = []
+    for it in gold.items.values():
+        found = matches[it.id]
+        if it.tier == "top":
+            tier_ok = any(nodes[x].parent is None for x in found)
+        elif it.tier.startswith("under:"):
+            owners = set(matches.get(it.tier[6:], {}))
+            tier_ok = any(ancestors(x) & owners for x in found)
+        else:
+            tier_ok = bool(found)
+        how = "đoạn" if "đoạn" in found.values() else ("thuật ngữ" if found else "")
+        results.append(ItemResult(it.id, it.must, sorted(found), tier_ok, how))
+
+    near: dict[str, set[str]] = {}  # hàng xóm không hướng
+    for e in graph.edges:
+        near.setdefault(e.src, set()).add(e.dst)
+        near.setdefault(e.dst, set()).add(e.src)
+
+    def linked(x: str, y: str) -> bool:
+        nx = near.get(x, set())
+        return y in nx or any(y in near.get(z, set()) for z in nx)
+
+    rels = []
+    for r in gold.relations:
+        a, b = set(matches[r.src]), set(matches[r.dst])
+        ok = any(linked(x, y) for x in a for y in b)
+        if not ok and r.ancestor_ok:
+            ok = any(y in ancestors(x) or x in ancestors(y) for x in a for y in b)
+        rels.append((r.src, r.dst, ok))
+
+    matched_nodes = {x for found in matches.values() for x in found}
+    extra = [n.id for n in nodes.values() if n.parent is None and n.id not in matched_nodes]
+    return Score(results, rels, extra)
+
+
+def render(sc: Score, title: str) -> str:
+    s = sc.summary()
+    lines = [f"chấm «{title}» theo đáp án: phủ {s['covered']}/{s['must']} ý bắt buộc ({s['coverage']:.0%}), "
+             f"đúng tầng {s['tier']:.0%}, quan hệ {s['relations']:.0%}, ý tuỳ chọn {s['optional_covered']}/{s['optional']}",
+             ""]
+    for i in sc.items:
+        mark = ("✓" if i.tier_ok else "≈") if i.matched else ("✗" if i.must else "·")
+        tag = "bắt buộc" if i.must else "tuỳ chọn"
+        detail = f"{', '.join(i.matched)} (khớp theo {i.how})" if i.matched else "không ô nào khớp"
+        note = "" if i.tier_ok or not i.matched else "  ← sai tầng"
+        lines.append(f"{mark} {i.id:<14} {tag:<9} {detail}{note}")
+    if sc.relations:
+        lines.append("")
+        lines += [f"{'✓' if ok else '✗'} quan hệ {a} → {b}" for a, b, ok in sc.relations]
+    if sc.extra:
+        lines += ["", "ô tầng đầu không khớp ý nào trong đáp án: " + ", ".join(sc.extra)]
+    return "\n".join(lines)

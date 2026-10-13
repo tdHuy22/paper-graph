@@ -11,6 +11,7 @@ Dạng file (xem docs/format.md):
      "blocks":  [{"id": "p1-b1", "page": 1, "bbox": [x0, y0, x1, y1], "label": "doc_title", "text": "…"}],
      "figures": [{"id": "p3-f1", "page": 3, "bbox": […], "kind": "image", "caption": "p3-b9"}]}
 """
+import re
 from dataclasses import dataclass, field
 
 from .model import ID
@@ -128,12 +129,17 @@ def parse(doc) -> tuple[Blocks | None, list[str]]:
         if not ok:
             errs.append(f"blocks: blocks[{i}] thiếu id/page/bbox/text hợp lệ, hoặc trùng id, hoặc trang không có")
             continue
-        blocks[b["id"]] = Block(b["id"], b["page"], tuple(b["bbox"]), str(b.get("label") or "text"), b["text"])
+        label = b.get("label") or "text"
+        if not (isinstance(label, str) and re.fullmatch(r"[a-z_]{1,40}", label)):
+            errs.append(f"blocks: blocks[{i}] nhãn bố cục phải là chữ thường và _, tối đa 40 ký tự")
+            continue
+        blocks[b["id"]] = Block(b["id"], b["page"], tuple(b["bbox"]), label, b["text"])
     figures: dict[str, dict] = {}
     for i, f in enumerate(doc.get("figures") if isinstance(doc.get("figures"), list) else []):
         ok = (isinstance(f, dict) and _id(f.get("id")) and f["id"] not in figures and f["id"] not in blocks
               and _page(f.get("page"), pages) and isinstance(f.get("kind"), str) and f["kind"] in FIGURE_KINDS
-              and _bbox(f.get("bbox")) and (f.get("caption") is None or _id(f["caption"])))
+              and _bbox(f.get("bbox")) and (f.get("caption") is None or _id(f["caption"]))
+              and (f.get("text") is None or isinstance(f["text"], str)))
         if not ok:
             errs.append(f"blocks: figures[{i}] thiếu id/page/bbox/kind hợp lệ, hoặc trùng id")
             continue

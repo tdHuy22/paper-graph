@@ -26,7 +26,9 @@ Hai file cho mỗi bài:
 - `blocks[].text`: chữ như in, bỏ đậm nghiêng; công thức giữa câu thay bằng đúng các ký tự của nó trên trang (`dk`
   cho d_k). Đoạn chỉ có số hay công thức (ô bảng toàn số) bị bỏ.
 - `figures[].kind`: `image`, `chart`, `table`, `formula` (công thức đứng riêng dòng). `caption` là id của đoạn chú thích
-  gần nhất nếu có.
+  gần nhất nếu có. `text`: chữ in trong vùng (tối đa 4000 ký tự). Với bảng, đây là chỗ duy nhất có số liệu: ô toàn số
+  không vào `blocks` vì bộ gom đoạn của VietPaper bỏ chúng (không cần dịch). Chỉ số mũ in nhỏ mất vị trí (10²⁰ thành
+  1020).
 - `pages[].text` false: trang scan chưa có chữ (chạy lại với `--ocr`). `layout` false: không nạp được model bố cục,
   đoạn gom theo khoảng cách và hình không được tách.
 - id đoạn ổn định khi chạy lại cùng PDF với cùng VietPaper (`source.extractor` ghi băm của `app.py`). VietPaper đổi
@@ -129,6 +131,7 @@ Câu trích có ở nhiều chỗ trên trang (thân bài và chú thích hình)
 | PG208 | cảnh báo | ô suy luận không neo vào tiền đề nào |
 | PG210 | cảnh báo | neo vào trang scan chưa có chữ: chưa kiểm được |
 | PG211 | lỗi | không có blocks.json để kiểm neo |
+| PG220 | cảnh báo | con số trong nhãn, thuật ngữ, giải thích của ô không có trong chữ bài mà ô dựa vào (đoạn được neo, chú thích và chữ của hình/bảng gắn với ô); cũng áp cho nhãn cạnh (so với chữ bài của hai đầu) và nhãn nhóm (thành viên và ô cha) |
 | PG300 | lỗi | tầng có trên 9 ô |
 | PG301 | lỗi | sơ đồ không có ô nào |
 | PG302 | cảnh báo | tầng dưới chỉ có một ô |
@@ -138,9 +141,35 @@ Câu trích có ở nhiều chỗ trên trang (thân bài và chú thích hình)
 | PG306 | cảnh báo | cạnh `supports`/`contradicts` không đi từ `evidence` tới `claim` |
 | PG307 | cảnh báo | bằng chứng không nối tới tuyên bố nào |
 | PG308 | cảnh báo | ô nằm sâu hơn 3 tầng |
+| PG401 | lỗi | (`--base`) ô `locked` của bản cũ bị đổi, bị xoá, hay cạnh giữa hai ô locked, nhóm chứa ô locked bị đổi |
+| PG402 | cảnh báo | (`--base`) ô `accepted` của bản cũ bị đổi |
 
 Neo đạt nghĩa là câu trích **có thật ở trang đã ghi của đúng bài**. Nó không chứng minh ô diễn giải đúng câu ấy:
-phần đó cần người đọc, hay bước review ở Mốc 2.
+phần đó cần người đọc. Riêng con số thì có kiểm (PG220). Một số trong ô là **một** giá trị, không bao giờ tách thành
+danh sách ("41,8" là 41,8, không phải 41 và 8); đọc được kiểu Việt (28,4; 1.234,5; 100.000) lẫn kiểu Anh (28.4;
+1,234.5; 100,000), số khoa học (3e-4), số kèm đơn vị (80GB). Số có đúng một dấu ngăn và ba chữ số sau ("512.000") đọc
+theo hàng nghìn; cách đọc thập phân chỉ được nhận khi bài viết đúng dãy đó. Số âm của ô cần số âm của bài; số dương
+khớp cả hai dấu. Số nguyên sau "lớp, bước, vòng, nhóm, head…" là tên (lớp 5), trừ khi có "mỗi/each/per" đứng trước
+("mỗi head 64 chiều" vẫn được kiểm). Phía bài: bỏ số trích dẫn ([11]) và số dính tên (P100), nhận số viết
+bằng chữ (eight), khoảng (0.1-0.4), phân vị (p95), và năm dính tên (newstest2014 cho "WMT 2014"). Số chỉ tên trong ô
+không tính: Bảng 2, Hình 1, §3.1, Eq.(4), nhóm 2, vòng 3, P100, GPT-4, LLaMA3-8B. Không kiểm được: số viết bằng chữ
+tiếng Việt ("bốn"), nên skill dặn viết bằng chữ số.
+
+## Dựng lại mà không mất phần người đã sửa
+
+Ô `status: locked` là ô người dùng đã kiểm và khoá. Trước khi dựng lại, chép sơ đồ cũ ra một file rồi kiểm bản mới so
+với nó:
+
+```bash
+cp bai.graph.json bai.graph.old.json                                   # trước khi dựng lại hay sửa
+python3 -m paper_graph check bai.graph.json --base bai.graph.old.json
+python3 -m paper_graph check bai.graph.json --base git                 # so với bản ở commit HEAD
+```
+
+Ô locked bị đổi bất kỳ trường nào, bị xoá, hay cạnh giữa hai ô locked và nhóm chứa ô locked (nhãn, ô cha, thành
+viên) bị đổi, là lỗi PG401. `--base git` chỉ đúng khi mọi lần khoá ô đã được commit: ô vừa khoá mà chưa commit thì
+bản ở HEAD không biết, nên luôn chép bản đang có ra trước khi dựng lại. Ô `accepted` bị đổi là cảnh báo PG402: được đổi, nhưng
+phải nói lý do.
 
 Mã thoát: 0 đạt; 1 có lỗi (hay có cảnh báo khi `--strict`); 2 không đọc được input (file thiếu, hỏng, quá trần,
 đường dẫn trong sơ đồ trỏ ra ngoài thư mục).

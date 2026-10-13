@@ -71,6 +71,10 @@ class AttentionReference(unittest.TestCase):
             with self.subTest(name):
                 self.assertIn(want, codes(self.mutate(fn)))
 
+    def test_changed_number_is_flagged(self):  # TM-7 trên bài thật: số của Bảng 2 nằm trong chữ của vùng bảng
+        r = self.mutate(lambda g: self.node(g, "r.table2_bleu").update(label="Bảng 2: BLEU 29,4 Anh–Đức, 41,8 Anh–Pháp"))
+        self.assertEqual([(d.code, d.msg.rsplit(": ", 1)[-1]) for d in r.diags], [("PG220", "29,4")])
+
     def test_unbacked_claim_is_flagged(self):
         r = self.mutate(lambda g: g.update(edges=[e for e in g["edges"] if e["to"] != "r.general"]))
         self.assertIn("PG305", {d.code for d in r.diags})

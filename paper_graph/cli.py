@@ -2,7 +2,10 @@
 
     extract       BAI.pdf [-o BAI.blocks.json] [--ocr] [--vietpaper DIR]   PDF → các đoạn kèm toạ độ
     verify-blocks BAI.pdf BAI.blocks.json                                  trích lại, so với blocks đã có
-    check         BAI.graph.json [--blocks F] [--pdf F] [--json] [--strict] kiểm sơ đồ với bài gốc
+    read          BAI.blocks.json [--pages 1-3] [--find CỤM] [--all]        in chữ bài kèm id đoạn
+    score         BAI.graph.json BAI.gold.json [--json] [--min-coverage 0.8] chấm theo đáp án tay
+    check         BAI.graph.json [--blocks F] [--pdf F] [--base CŨ] [--json] [--strict]
+                                                                           kiểm sơ đồ với bài gốc
 
 Mã thoát: 0 đạt, 1 sơ đồ có lỗi (hay có cảnh báo khi --strict), 2 không đọc được input.
 """
@@ -85,8 +88,91 @@ def cmd_check(a) -> int:
         if errs:
             raise InputError(f"{bpath} hỏng:\n" + "\n".join(errs[:20]))
     pdf_sha = sha256_file(Path(a.pdf)) if a.pdf else None
-    report = check(graph, blocks, pdf_sha, diags)
+    base = None
+    if a.base:
+        old_doc = _git_head(gpath) if a.base == "git" else read_json(Path(a.base), "sơ đồ cũ")
+        base, base_diags = parse_graph(old_doc)
+        if base is None or any(x.level == "error" for x in base_diags):
+            raise InputError(f"{a.base} không đọc được như một sơ đồ: chạy check trên nó trước")
+    report = check(graph, blocks, pdf_sha, diags, base)
     return finish(report, graph.title, a)
+
+
+def cmd_score(a) -> int:
+    from . import gold as gold_mod  # noqa: PLC0415
+    from . import score as score_mod  # noqa: PLC0415
+
+    gpath = Path(a.graph)
+    graph, diags = parse_graph(read_json(gpath, "sơ đồ"))
+    if graph is None:
+        raise InputError(f"{gpath} không đọc được như một sơ đồ: chạy check trước")
+    gold, errs = gold_mod.parse(read_json(Path(a.gold), "đáp án"))
+    if errs:
+        raise InputError(f"{a.gold} hỏng:\n" + "\n".join(errs[:20]))
+    bpath = Path(a.blocks) if a.blocks else sibling(gpath, graph.blocks_file or "", ".blocks.json")
+    blocks, errs = blocks_mod.parse(read_json(bpath, "blocks"))
+    if errs:
+        raise InputError(f"{bpath} hỏng:\n" + "\n".join(errs[:20]))
+    if gold.sha256 != blocks.sha256 or graph.sha256 != blocks.sha256:
+        raise InputError("sơ đồ, đáp án và blocks không cùng một bài (sha256 khác nhau)")
+    sc = score_mod.score(graph, gold, blocks)
+    rep = check(graph, blocks, None, diags)
+    if a.json:
+        print(json.dumps({"check_errors": rep.errors, "summary": sc.summary(), "items": [vars(i) for i in sc.items],
+                          "relations": [{"from": x, "to": y, "ok": ok} for x, y, ok in sc.relations],
+                          "extra_top": sc.extra}, ensure_ascii=False, indent=1))
+    else:
+        print(render_score(sc, graph.title))
+        print(f"check: {rep.errors} lỗi, {rep.warnings} cảnh báo" + (" (sơ đồ chưa đạt check: điểm chưa có nghĩa)"
+                                                                  if rep.errors else ""))
+    return 0 if sc.coverage >= a.min_coverage and rep.errors == 0 else 1
+
+
+def render_score(sc, title: str) -> str:
+    from .score import render  # noqa: PLC0415
+
+    return render(sc, safe(title, 80))
+
+
+def _git_head(gpath: Path):
+    """Bản của sơ đồ ở commit HEAD (`check --base git`): bản cũ do git giữ, không phụ thuộc agent nhớ chép ra trước
+    khi sửa (TM-8)."""
+    import subprocess  # noqa: PLC0415
+
+    gpath = gpath.resolve()
+    try:
+        r = subprocess.run(["git", "-C", str(gpath.parent), "show", f"HEAD:./{gpath.name}"],
+                           capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise InputError(f"không chạy được git để lấy bản cũ: {e}") from None
+    if r.returncode != 0:
+        raise InputError(f"{gpath.name} chưa có trong commit HEAD: chép bản cũ ra file rồi dùng --base FILE")
+    if len(r.stdout) > 50 * 1024 * 1024:
+        raise InputError("bản cũ trong git quá trần 50 MB")
+    try:
+        return json.loads(r.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError) as e:
+        raise InputError(f"bản cũ trong git không đọc được: {e}") from None
+
+
+def cmd_read(a) -> int:
+    from . import reader  # noqa: PLC0415
+
+    bpath = Path(a.blocks)
+    doc = read_json(bpath, "blocks")
+    blocks, errs = blocks_mod.parse(doc)
+    if errs:
+        raise InputError(f"{bpath} hỏng:\n" + "\n".join(errs[:20]))
+    if a.find:
+        print(reader.find(blocks, a.find))
+        return 0
+    try:
+        pages = reader.parse_pages(a.pages, blocks.pages)
+    except ValueError as e:
+        raise InputError(str(e)) from None
+    title = next((b.text for b in blocks.blocks.values() if b.label == "doc_title"), doc["source"].get("file", ""))
+    print(reader.render(blocks, bpath.name, title, pages, everything=a.all))
+    return 0
 
 
 def check_failed(diags):
@@ -129,6 +215,22 @@ def main(argv=None) -> int:
     c.add_argument("--pdf", help="PDF gốc: băm lại để chắc sơ đồ nói về đúng file này")
     c.add_argument("--json", action="store_true", help="in kết quả dạng JSON")
     c.add_argument("--strict", action="store_true", help="cảnh báo cũng tính là trượt")
+    c.add_argument("--base", help="sơ đồ cũ (file, hay `git` = bản ở commit HEAD): ô locked phải còn nguyên (PG401)")
+
+    s = sub.add_parser("score", help="chấm sơ đồ theo đáp án tay của bộ đo (docs/bench.md)")
+    s.add_argument("graph")
+    s.add_argument("gold")
+    s.add_argument("--blocks", help="mặc định: paper.blocks trong sơ đồ")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--min-coverage", type=float, default=0.8, help="độ phủ ý bắt buộc tối thiểu để mã thoát 0")
+    s.set_defaults(fn=cmd_score)
+
+    r = sub.add_parser("read", help="in chữ của bài theo trang, mỗi đoạn kèm id, để chép câu trích")
+    r.add_argument("blocks")
+    r.add_argument("--pages", help="vd. 1-3,7 (mặc định: mọi trang)")
+    r.add_argument("--find", help="tìm cụm từ: in trang và đoạn chứa nó")
+    r.add_argument("--all", action="store_true", help="in cả tài liệu tham khảo, đầu/chân trang, từng ô bảng")
+    r.set_defaults(fn=cmd_read)
     c.set_defaults(fn=cmd_check)
 
     a = p.parse_args(argv)

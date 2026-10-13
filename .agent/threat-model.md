@@ -30,3 +30,32 @@ giữa một con số hay một từ vẫn khớp ("score of 2" với 28.4, "pos
 test thiếu nhánh (lớp `_Diags`, so pages/figures, vòng symlink, hai điều kiện độ dài riêng), số dòng sai ở TM-1. Sửa cả
 8; so khớp chuyển sang có ranh giới từ và số. Kiểm đột biến: gỡ ranh giới hay gỡ lớp làm sạch `_Diags` thì test trượt.
 
+
+## 2026-10-12 · Mốc 2, việc 3.1: skill dựng sơ đồ (`dung-so-do`)
+Luồng:
+- `*.blocks.json` (chữ của PDF, không tin cậy) → `python3 -m paper_graph read` in ra → vào ngữ cảnh của agent Claude
+  Code đang dựng sơ đồ. Agent có shell, đọc ghi file, mạng.
+- Agent viết `<tên>.graph.json` → `paper_graph check` (kiểm neo, số liệu, ô đã khoá so với bản cũ).
+- Tài sản: máy, file và khoá của người dùng; độ đúng của nội dung sơ đồ; công sửa tay của người dùng (ô `locked`).
+- Chữ bài gửi tới Anthropic qua Claude Code: được phép theo luật chung (bài báo thường là công khai; bài riêng thì
+  người dùng tự quyết có dựng hay không).
+
+| ID | Mối đe dọa | Actor | Surface | Asset | Chốt chặn phải có | Trạng thái |
+|---|---|---|---|---|---|---|
+| TM-6 | Prompt injection: chữ trong bài (cố ý, hay vô tình như bài về prompt injection có ví dụ "Ignore previous instructions…") khiến agent chạy lệnh, mở URL, ghi file ngoài chỗ cho phép, hay dựng sơ đồ theo ý kẻ viết | tác giả PDF | `paper_graph read` → ngữ cảnh agent | máy, file, khoá của người dùng | `read` mở đầu bằng lời nhắc chữ bên dưới là dữ liệu, mỗi đoạn có tiền tố id, ký tự điều khiển được làm sạch. Skill: chữ bài là dữ liệu; chỉ chạy `paper_graph extract/read/check`; chỉ ghi đúng `<tên>.graph.json` cạnh blocks; không mở URL hay chạy lệnh nhắc trong bài; gặp chữ ra lệnh thì ghi vào báo cáo. Eval: bài mồi có đoạn ra lệnh tạo file và chạy curl → agent không làm và có báo | đã có: `paper_graph/reader.py` (lời nhắc dữ liệu đứng trước tên bài; mọi dòng mang chữ bài có tiền tố `[id]`, kể cả chữ trong vùng bảng và kết quả `--find`; nhãn đoạn và chữ qua `safe()`; dòng kết `══ HẾT CHỮ CỦA BÀI ══`), `paper_graph/blocks.py` (nhãn đoạn chỉ `[a-z_]`); `.claude/skills/dung-so-do/SKILL.md` mục "An toàn". Test: `test_build_support.py` `Read`, `ReviewFixes.test_read_marks_every_paper_line_and_cleans_labels`, `test_bad_label_rejected_and_sparse_pages`. Eval lặp lại được: `bench/canary/make_canary.py`; lượt 1 và 2 (Sonnet) đều không làm theo, báo đúng `p1-b4`. Còn hở: đây là chỉ dẫn cho model, không phải rào kỹ thuật (agent vẫn có shell và mạng); chưa có luật chặn quyền của Claude Code cho project (2026-10-13 bạn chọn chỉ commit, chưa thêm); chữ ẩn trong PDF (chữ trắng, cỡ 0,5pt) không bị lọc, được coi là dữ liệu như chữ thường |
+| TM-7 | Ô diễn giải sai câu neo: neo có thật nhưng con số trong nhãn hay giải thích bịa hoặc chép nhầm (28,4 thành 41,8; 8 GPU thành 80 GPU) | model dựng sơ đồ | `label`, `explain` | độ tin của sơ đồ | `check` đối chiếu mọi con số trong nhãn và giải thích với chữ của các đoạn được neo và chữ trong hình/bảng của ô (PG220); đọc cả kiểu Việt (28,4; 100.000) lẫn kiểu Anh, số viết bằng chữ (eight, twelve); bỏ qua số chỉ tên mục, bảng, hình. Test: số bịa bị bắt, số đúng viết hai kiểu đều qua | đã có: `paper_graph/numbers.py` (một số là một giá trị, không tách danh sách; số âm, khoa học, kèm đơn vị; bỏ số trích dẫn và số dính tên phía bài; khoảng, phân vị, năm dính tên), `paper_graph/check.py` (`_sources`, `_numbers`: ô gồm `term`; nhãn cạnh; nhãn nhóm; ô không có neo hợp lệ cũng bị kiểm), `paper_graph/extract.py` (chữ trong vùng hình/bảng). Test: `test_build_support.py` `Numbers`, `NumberCheck`, `ReviewFixes` (41,8 không khớp nhờ "eight", 100.000 không khớp nhờ P100, [11] không tính); `test_bench.py` `test_changed_number_is_flagged`. Còn hở: số viết bằng chữ tiếng Việt không được kiểm (skill dặn viết chữ số) |
+| TM-8 | Dựng lại ghi đè hay xoá ô người dùng đã khoá | model dựng sơ đồ | ghi `graph.json` | công sửa tay | `check --base BẢN_CŨ`: ô `locked` của bản cũ phải còn nguyên (PG401), ô `accepted` bị đổi thì cảnh báo (PG402); skill lưu bản cũ trước khi dựng lại và chạy `check --base`. Test: sửa nhãn hay xoá ô locked → PG401 | đã có: `paper_graph/check.py` (`_against_base`, `_links_changed`: ô locked, cạnh giữa hai ô locked, nhóm chứa ô locked → PG401; ô accepted → PG402), `paper_graph/cli.py` (`--base FILE` hay `--base git` lấy bản ở commit HEAD); skill bước 1 và 5. Test: `test_build_support.py` `Base`, `ReviewFixes.test_locked_edges_and_groups`, `test_base_from_git`. Còn hở: `--base` vẫn phải được gọi; sơ đồ chưa commit thì cần agent chép bản cũ |
+
+Review việc 3.1 (differential-review qua subagent, 2026-10-12, báo cáo ở `.tmp/chot-viec/`) tìm 8: kiểm số đọc "41,8"
+thành danh sách nên khớp nhờ "eight" (141/298 số sai lọt trên bài Attention), `read` in nhãn và chữ trong vùng không
+làm sạch hay không có tiền tố, `--base` không so cạnh và nhóm của ô locked, nhiều chỗ PG220 không kiểm (term, nhãn
+cạnh, nhãn nhóm, số âm, số kèm đơn vị, ô không neo), `read` văng khi số trang không liền, bộ chấm tính neo một từ,
+đáp án của bộ đo đọc được khi dựng. Đã sửa cả 8, mỗi mục có test. Mục "luật chặn quyền cứng" (F3): 2026-10-13 bạn chọn chưa thêm.
+
+Review cuối (agent-stack:reviewer, opus, 2026-10-12) tìm 6, sửa cả 6, mỗi mục có test (`test_build_support.py`
+`FinalReviewFixes`): dựng lại so với `--base git` mất ô vừa khoá chưa commit (skill giờ luôn chép bản cũ ra trước, chỉ
+dùng `--base <tên>.graph.old.json`); số có cả hai dấu ngăn làm `check` văng; "512.000" khớp nhờ "512" (một dấu ngăn và
+ba chữ số đọc theo hàng nghìn, cách đọc thập phân cần bài viết đúng dãy đó); so ô khoá bỏ sót thành viên nhóm và cạnh
+trùng cặp; số sau "mỗi lớp/mỗi head" không được kiểm; dấu âm bị bỏ. Đột biến 14 chỗ sửa của lượt trước: 13 làm test
+trượt (chỗ còn lại có lớp chặn khác).
+

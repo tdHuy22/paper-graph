@@ -4,3 +4,7 @@ __pycache__/
 .tmp/
 # chữ toàn văn của bài báo: tạo lại bằng bench/prepare.py, không đưa vào git
 *.blocks.json
+# PDF của bài người dùng dựng sơ đồ (papers/<tên>/): không đưa vào git
+*.pdf
+# bản lưu trước khi dựng lại (check --base)
+*.graph.old.json
