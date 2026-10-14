@@ -46,7 +46,8 @@ def main(argv: list[str]) -> int:
         rows.append(f"{name:<14} {'đạt ' if ok else 'TRƯỢT'}  lỗi {rep.errors}, cảnh báo {rep.warnings}, "
                     f"neo {rep.stats['anchors_ok']}/{rep.stats['anchors']}, {rep.stats['nodes']} ô · "
                     f"phủ {s['covered']}/{s['must']} ({s['coverage']:.0%}), đúng tầng {s['tier']:.0%}, "
-                    f"quan hệ {s['relations']:.0%}, tuỳ chọn {s['optional_covered']}/{s['optional']}")
+                    f"quan hệ {s['relations']:.0%}, tuỳ chọn {s['optional_covered']}/{s['optional']}"
+                    + (f", soi {s['probes_ok']}/{s['probes']}" if s["probes"] else ""))
     print("\n".join(rows))
     print("ngưỡng: 0 lỗi check, phủ ≥ 80% ý bắt buộc")
     return worst

@@ -6,14 +6,17 @@ hoặc nhãn/thuật ngữ/giải thích của ô chứa một trong `terms` c�
     đúng tầng   ý bắt buộc có ô khớp nằm đúng `tier` (top: tầng đầu; under:X: trong cây con của ô khớp ý X)
     quan hệ     hai ô khớp hai đầu nối nhau trong cùng tầng, trực tiếp hay qua một ô ở giữa (vấn đề → ý → cách làm),
                 hay, khi `ancestor_ok`, ô này nằm trong cây con của ô kia
+    soi         điểm soi (`probes`) đạt: cạnh đúng loại và mức giữa hai phía, hay một ô nêu đủ số và từ của chỗ bài
+                tự lệch; đo thứ độ phủ không đo (thấy chỗ bài tự lệch, chấm mức bằng chứng đúng)
 """
 import re
 from dataclasses import dataclass, field
 
 from . import model as m
+from . import numbers as nums
 from .blocks import Blocks
 from .check import MIN_QUOTE_CHARS, MIN_QUOTE_WORDS
-from .gold import Gold
+from .gold import Gold, Probe, Side
 from .text import squash, word_count
 
 
@@ -31,6 +34,7 @@ class Score:
     items: list[ItemResult]
     relations: list[tuple[str, str, bool]]
     extra: list[str] = field(default_factory=list)  # ô tầng đầu không khớp ý nào (có thể là ý hay ngoài đáp án)
+    probes: list[tuple[str, bool, str]] = field(default_factory=list)  # (id, đạt, giải thích)
 
     def _must(self) -> list[ItemResult]:
         return [i for i in self.items if i.must]
@@ -49,12 +53,17 @@ class Score:
     def relation_rate(self) -> float:
         return sum(ok for *_, ok in self.relations) / len(self.relations) if self.relations else 1.0
 
+    @property
+    def probe_rate(self) -> float | None:
+        return sum(ok for _, ok, _ in self.probes) / len(self.probes) if self.probes else None
+
     def summary(self) -> dict:
         must = self._must()
         return {"coverage": round(self.coverage, 3), "covered": sum(bool(i.matched) for i in must), "must": len(must),
                 "tier": round(self.tier, 3), "relations": round(self.relation_rate, 3),
                 "optional_covered": sum(bool(i.matched) for i in self.items if not i.must),
-                "optional": sum(not i.must for i in self.items)}
+                "optional": sum(not i.must for i in self.items),
+                "probes_ok": sum(ok for _, ok, _ in self.probes), "probes": len(self.probes)}
 
 
 def _blocks_of(anchors: list[m.Anchor], blocks: Blocks) -> set[str]:
@@ -131,13 +140,50 @@ def score(graph: m.Graph, gold: Gold, blocks: Blocks) -> Score:
 
     matched_nodes = {x for found in matches.values() for x in found}
     extra = [n.id for n in nodes.values() if n.parent is None and n.id not in matched_nodes]
-    return Score(results, rels, extra)
+    probes = [_probe(p, graph, node_blocks, node_text, blocks) for p in gold.probes]
+    return Score(results, rels, extra, probes)
+
+
+def _on_side(side: Side, node_blocks: dict[str, set[str]], graph: m.Graph, blocks: Blocks) -> set[str]:
+    want = _blocks_of(side.anchors, blocks)
+    return {n.id for n in graph.nodes.values() if node_blocks[n.id] & want or (n.figure and n.figure in side.figures)}
+
+
+def _probe(p: Probe, graph: m.Graph, node_blocks, node_text, blocks: Blocks) -> tuple[str, bool, str]:
+    if p.type == "edge":
+        src = _on_side(p.src, node_blocks, graph, blocks)
+        dst = _on_side(p.dst, node_blocks, graph, blocks) if p.dst else None
+        if not src:
+            return p.id, False, "không ô nào khớp phía from"
+        if dst is not None and not dst:
+            return p.id, False, "không ô nào khớp phía to"
+        edges = [e for e in graph.edges if e.src in src and (dst is None or e.dst in dst)]
+        typed = [e for e in edges if p.kind is None or e.kind == p.kind]
+        if not typed:
+            have = ", ".join(sorted({e.kind for e in edges})) or "không có cạnh"
+            return p.id, False, f"không có cạnh {p.kind or ''} giữa hai phía ({have})".replace("  ", " ")
+        good = [e for e in typed if not p.strengths or e.strength in p.strengths]
+        if not good:
+            got = ", ".join(sorted({str(e.strength) for e in typed}))
+            return p.id, False, f"mức {got}, mong {' hay '.join(p.strengths)}"
+        e = good[0]
+        return p.id, True, f"{e.src} → {e.dst} ({e.kind}{', ' + e.strength if e.strength else ''})"
+    at = _on_side(p.at, node_blocks, graph, blocks)
+    if not at:
+        return p.id, False, "không ô nào neo vào chỗ đó"
+    for nid in sorted(at):
+        vals = nums.values_of(node_text[nid])
+        if all(any(nums.values_of(x) & vals for x in g) for g in p.numbers) and \
+                all(any(_has_term(node_text[nid], w) for w in g) for g in p.words):
+            return p.id, True, f"ô {nid}"
+    return p.id, False, f"{len(at)} ô neo vào đó nhưng không ô nào nêu đủ số, từ"
 
 
 def render(sc: Score, title: str) -> str:
     s = sc.summary()
     lines = [f"chấm «{title}» theo đáp án: phủ {s['covered']}/{s['must']} ý bắt buộc ({s['coverage']:.0%}), "
-             f"đúng tầng {s['tier']:.0%}, quan hệ {s['relations']:.0%}, ý tuỳ chọn {s['optional_covered']}/{s['optional']}",
+             f"đúng tầng {s['tier']:.0%}, quan hệ {s['relations']:.0%}, ý tuỳ chọn {s['optional_covered']}/{s['optional']}"
+             + (f", soi {s['probes_ok']}/{s['probes']}" if s["probes"] else ""),
              ""]
     for i in sc.items:
         mark = ("✓" if i.tier_ok else "≈") if i.matched else ("✗" if i.must else "·")
@@ -148,6 +194,9 @@ def render(sc: Score, title: str) -> str:
     if sc.relations:
         lines.append("")
         lines += [f"{'✓' if ok else '✗'} quan hệ {a} → {b}" for a, b, ok in sc.relations]
+    if sc.probes:
+        lines.append("")
+        lines += [f"{'✓' if ok else '✗'} soi {pid}: {why}" for pid, ok, why in sc.probes]
     if sc.extra:
         lines += ["", "ô tầng đầu không khớp ý nào trong đáp án: " + ", ".join(sc.extra)]
     return "\n".join(lines)

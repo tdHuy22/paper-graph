@@ -82,5 +82,16 @@
   {"from": "idea", "to": "method", "what": "ý được hiện thực bằng bài toán minimax"},
   {"from": "method", "to": "result", "what": "phương pháp cho ra kết quả"},
   {"from": "adaptive", "to": "method", "what": "Bảng 6 chống đỡ việc đưa tấn công thích nghi vào thiết kế", "ancestor_ok": true}
+ ],
+ "probes": [
+  {"id": "nin_default", "type": "note",
+   "what": "Cấu hình mặc định nin = 10, nhưng phần ablation nói nin phải trên 100 mới ổn định (Hình 5a): ô phải nêu cả hai số",
+   "at": {"figures": ["p11-f5"], "anchors": [{"page": 10, "quote": "Unless otherwise mentioned, we adopt the following default setting"},
+                                             {"page": 11, "quote": "when nin (or nout) is large enough, i.e., larger than 100 (or 300)"}]},
+   "numbers": [["10"], ["100"]], "words": [["lệch", "không khớp", "mâu thuẫn", "nói khác", "đối chiếu", "không bằng"]]},
+  {"id": "sentiment_087", "type": "note",
+   "what": "Bảng 6: khi tác vụ đích và tác vụ chèn cùng là phân tích cảm xúc, FNR của DataSentinel lên 0,87 dưới tấn công thích nghi",
+   "at": {"figures": ["p13-f1"], "anchors": [{"page": 13, "quote": "DataSentinel (Minimax) becomes less effective with a FNR of 0.87"}]},
+   "numbers": [["0.87", "87"]]}
  ]
 }

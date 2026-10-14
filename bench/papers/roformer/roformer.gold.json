@@ -113,5 +113,22 @@
   {"from": "linear", "to": "performer", "what": "tính chất ghép được với linear attention được thử bằng Performer"},
   {"from": "wmt", "to": "result", "what": "Bảng 1 chống đỡ kết quả", "ancestor_ok": true},
   {"from": "cail", "to": "result", "what": "Bảng 5 chống đỡ tuyên bố văn bản dài", "ancestor_ok": true}
+ ],
+ "probes": [
+  {"id": "glue_vs_always", "type": "edge", "kind": "contradicts", "strength": ["strong", "moderate"],
+   "what": "Bảng 2 (GLUE kém BERT ở 3/6 tập) bác câu tóm tắt và mở đầu nói RoFormer luôn hơn",
+   "from": {"figures": ["p10-f3"], "anchors": [{"page": 10, "quote": "RoFormer can significantly outperform BERT in three out of six datasets"}]},
+   "to": {"anchors": [{"page": 1, "quote": "Our experiments show that it consistently overcomes its alternatives"},
+                      {"page": 2, "quote": "Our experiments show that it consistently achieves better performance compared to its alternatives"}]}},
+  {"id": "cail_15", "type": "note",
+   "what": "Chữ nói hơn WoBERT 1,5%, Bảng 5 cho 69,79 so với 68,10 (1,5 là RoFormer-1024 trừ RoFormer-512): ô phải nêu cả 1,5 lẫn số của bảng",
+   "at": {"figures": ["p12-f1"], "anchors": [{"page": 12, "quote": "RoFormer outperforms WoBERT by an absolute improvement of 1.5%"}]},
+   "numbers": [["1.5"], ["68.10", "68.29"]], "words": [["lệch", "không khớp", "mâu thuẫn", "nói khác", "đối chiếu", "không bằng"]]},
+  {"id": "wmt_strength", "type": "edge", "kind": "supports", "strength": ["moderate", "weak"],
+   "what": "Bảng 1: chênh 0,2 BLEU, một lần chạy, không độ dao động: không đủ để chấm strong",
+   "from": {"figures": ["p9-f1"], "anchors": [{"page": 9, "quote": "our model gives better BLEU scores compared to the baseline Transformer"}]}},
+  {"id": "cail_strength", "type": "edge", "kind": "supports", "strength": ["moderate", "weak"],
+   "what": "Bảng 5: chỉ RoFormer chạy ở 1024, các mô hình khác ở 512: khác điều kiện, không chấm strong",
+   "from": {"figures": ["p12-f1"], "anchors": [{"page": 12, "quote": "RoFormer outperforms WoBERT by an absolute improvement of 1.5%"}]}}
  ]
 }

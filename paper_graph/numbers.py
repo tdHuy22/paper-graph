@@ -148,6 +148,12 @@ def _literal(tok: str, paper_text: str) -> bool:
     return re.search(r"(?<![\d.,])" + whole + r"[.,]" + frac + r"(?![\d])", paper_text) is not None
 
 
+def values_of(text: str) -> set[float]:
+    """Mọi giá trị (cả hai dấu, mọi cách đọc) của các con số mà chữ trong ô nêu ra, bỏ số chỉ tên: để so một ô có
+    nhắc tới một con số hay không, bất kể viết kiểu Việt hay kiểu Anh."""
+    return {(-v if negative else v) for _, negative, readings in claimed(text) for v, _ in readings}
+
+
 def missing(node_text: str, paper_text: str) -> list[str]:
     """Số trong ô mà không cách đọc nào có trong chữ bài."""
     have = present(paper_text)

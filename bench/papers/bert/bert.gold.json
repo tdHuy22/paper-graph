@@ -77,5 +77,14 @@
   {"from": "idea", "to": "method", "what": "ý thành quy trình huấn luyện trước rồi tinh chỉnh"},
   {"from": "method", "to": "result", "what": "quy trình cho ra kết quả"},
   {"from": "glue", "to": "result", "what": "Bảng 1 chống đỡ kết quả", "ancestor_ok": true}
+ ],
+ "probes": [
+  {"id": "squad_strength", "type": "edge", "kind": "supports", "strength": ["moderate", "weak"],
+   "what": "Bảng 2 (SQuAD): BERT dùng thêm TriviaQA, còn hệ đứng đầu bảng xếp hạng không công bố cách làm: khác điều kiện, không chấm strong",
+   "from": {"figures": ["p7-f1"], "anchors": [{"page": 6, "quote": "Table 2 shows top leaderboard entries as well as results from top published systems"}]}},
+  {"id": "four_vs_three", "type": "note",
+   "what": "§5.2 nói cải thiện trên \"all four datasets\" nhưng Bảng 6 chỉ có cột độ chính xác cho MNLI-m, MRPC, SST-2: ô phải nêu số 4 của chữ và nói ra chỗ lệch (không đòi số đếm cột)",
+   "at": {"anchors": [{"page": 8, "quote": "larger models lead to a strict accuracy improvement across all four datasets"}]},
+   "numbers": [["4"]], "words": [["lệch", "không khớp", "mâu thuẫn", "nói khác", "đối chiếu", "không bằng"]]}
  ]
 }
