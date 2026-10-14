@@ -8,3 +8,5 @@ __pycache__/
 *.pdf
 # bản lưu trước khi dựng lại (check --base)
 *.graph.old.json
+# ảnh cắt từ bài bằng `paper_graph figure`: tạo lại được, và là nội dung của bài
+*.figures/

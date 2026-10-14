@@ -37,6 +37,7 @@ python3 -m paper_graph check bai.graph.json --pdf bai.pdf --json --strict
 # Đọc bài theo trang, mỗi đoạn kèm id, để chép câu trích; tìm một cụm ở trang nào
 python3 -m paper_graph read bai.blocks.json --pages 1-5
 python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
+../pdf-translator/.venv/bin/python -m paper_graph figure bai.blocks.json p8-f1   # cắt hình ra bai.figures/p8-f1.png
 ```
 
 Dựng sơ đồ: trong repo này, nhờ Claude Code "dựng sơ đồ cho bài X". Skill
@@ -62,7 +63,7 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 [docs/format.md](docs/format.md); bộ đo và đáp án tay ở [docs/bench.md](docs/bench.md).
 
 ```bash
-../pdf-translator/.venv/bin/python bench/prepare.py                      # trích bốn bài của bộ đo
+../pdf-translator/.venv/bin/python bench/prepare.py                      # trích năm bài của bộ đo
 ../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .    # 112 test
 ```
 

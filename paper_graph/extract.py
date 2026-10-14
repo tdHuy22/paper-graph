@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from .blocks import VERSION
-from .files import InputError
+from .files import InputError, read_regular
 
 MAX_PDF_BYTES = 150 * 1024 * 1024
 MAX_PAGES = 400
@@ -45,13 +45,7 @@ def load_vietpaper(path: Path):
 
 def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, lang: str = "eng",
             max_pages: int = MAX_PAGES, progress=None) -> dict:
-    try:
-        size = pdf.stat().st_size
-    except OSError as e:
-        raise InputError(f"không đọc được {pdf}: {e.strerror or e}") from None
-    if size > MAX_PDF_BYTES:
-        raise InputError(f"{pdf} nặng {size // (1024 * 1024)} MB, quá trần {MAX_PDF_BYTES // (1024 * 1024)} MB")
-    data = pdf.read_bytes()
+    data = read_regular(pdf, "PDF", MAX_PDF_BYTES)
     app = load_vietpaper(vietpaper)
     import pymupdf  # noqa: PLC0415 - có sẵn trong venv của VietPaper
 
@@ -78,20 +72,33 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
         n = i + 1
         if progress:
             progress(n, doc.page_count)
-        regions = app.detect_layout(page)
+        regions = app.detect_layout(page)  # toạ độ hiển thị (dò trên ảnh render của trang đã xoay)
+        content_regions = None if regions is None else [{**g, "bbox": tuple(_content(page, g["bbox"]))}
+                                                        for g in regions]
         has_text = app.page_has_text(page) and not app.text_is_garbled(page)
         raw: list[dict] = []
-        if has_text:
-            raw = app.extract_blocks(page, regions=regions)
-        elif ocr:
-            raw = app.lines_to_blocks(page, app.rapid_lines(page, lang), regions)
-        info = {"page": n, "width": round(page.rect.width, 2), "height": round(page.rect.height, 2),
+        if has_text:  # dòng chữ của get_text theo toạ độ nội dung: so với vùng đã đổi về cùng hệ
+            raw = app.extract_blocks(page, regions=content_regions)
+        used_ocr = False
+        # OCR khi trang không có lớp chữ, hay có mà bộ gom đoạn không lấy được đoạn nào: VietPaper bỏ dòng không nằm
+        # ngang, nên trang ngang trong phụ lục (chữ vẽ xoay, rồi /Rotate) ra 0 đoạn; OCR đọc trên ảnh hiển thị, nơi
+        # chữ đó nằm ngang. Dòng OCR theo toạ độ hiển thị: so với vùng gốc, rồi đổi khung đoạn.
+        if not raw and ocr:
+            raw = [{**b, "bbox": _content(page, b["bbox"])}
+                   for b in app.lines_to_blocks(page, app.rapid_lines(page, lang), regions)]
+            used_ocr = bool(raw)
+        size = _content(page, page.rect)
+        info = {"page": n, "width": round(size[2] - size[0], 2), "height": round(size[3] - size[1], 2),
                 "text": bool(has_text or raw), "layout": regions is not None}
+        if page.rotation:
+            info["rotation"] = page.rotation  # vẽ lên ảnh của trang thì nhân bbox với page.rotation_matrix
         label = page.get_label()
         if label:
             info["label"] = label
-        if not has_text and raw:
+        if used_ocr:
             info["ocr"] = True
+        if has_text and not raw:
+            info["unread"] = True  # có lớp chữ mà không ra đoạn nào: `read` báo, đừng để trang rỗng mà im lặng
         out["pages"].append(info)
 
         blocks, chars = [], None
@@ -104,7 +111,7 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
             blocks.append({"id": f"p{n}-b{k}", "page": n, "bbox": _box(b["bbox"]),
                            "label": b.get("label") or "text", "text": text})
         out["blocks"] += blocks
-        out["figures"] += figures(n, regions or [], blocks, page)
+        out["figures"] += figures(n, content_regions or [], blocks, page)
     release(app)
     return out
 
@@ -196,7 +203,7 @@ def figures(n: int, regions: list[dict], blocks: list[dict], page=None) -> list[
             continue
         box = _box(g["bbox"])
         fig = {"id": f"p{n}-f{len(out) + 1}", "page": n, "bbox": box, "kind": kind}
-        if page is not None:
+        if page is not None:  # vùng đã theo toạ độ nội dung, cùng hệ với get_text
             text = " ".join(page.get_text("text", clip=box).split())[:FIGURE_TEXT_MAX]
             if text:
                 fig["text"] = text
@@ -221,3 +228,16 @@ def figures(n: int, regions: list[dict], blocks: list[dict], page=None) -> list[
 
 def _box(b) -> list[float]:
     return [round(float(v), 2) for v in b]
+
+
+def _content(page, bbox) -> list[float]:
+    """Toạ độ hiển thị (trang đã xoay: ảnh render, vùng bố cục, dòng OCR) → toạ độ nội dung (trang chưa xoay, như
+    `get_text`). Mọi `bbox` trong blocks.json dùng toạ độ nội dung: chú thích "dưới" hình, công thức "sau" đoạn là
+    quan hệ theo chiều đọc của nội dung, ở trang ngang (`/Rotate`) cũng vậy. Ai vẽ hay cắt ảnh từ trang thì nhân lại
+    `rotation_matrix` (xem `figure.py`)."""
+    if not page.rotation:
+        return _box(bbox)
+    import pymupdf  # noqa: PLC0415 - có sẵn trong venv của VietPaper
+
+    r = pymupdf.Rect(bbox) * page.derotation_matrix
+    return _box((r.x0, r.y0, r.x1, r.y1))

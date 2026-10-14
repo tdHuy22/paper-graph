@@ -4,6 +4,7 @@ Chốt chặn TM-1 (file cố tình to) và TM-4 (đường dẫn trong sơ đ�
 """
 import hashlib
 import json
+import stat
 from pathlib import Path
 
 MAX_JSON_BYTES = 50 * 1024 * 1024
@@ -49,7 +50,30 @@ def write_json(path: Path, doc) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def read_regular(path: Path, what: str, limit: int) -> bytes:
+    """Đọc cả file, chỉ khi nó là file thường (FIFO, thiết bị thì `read` chờ mãi) và không quá `limit` byte."""
+    try:
+        st = path.stat()
+    except OSError as e:
+        raise InputError(f"không đọc được {what} {path}: {e.strerror or e}") from None
+    if not stat.S_ISREG(st.st_mode):
+        raise InputError(f"{what} {path} không phải file thường")
+    if st.st_size > limit:
+        raise InputError(f"{what} {path} nặng {st.st_size // (1024 * 1024)} MB, quá trần {limit // (1024 * 1024)} MB")
+    with path.open("rb") as f:
+        data = f.read(limit + 1)
+    if len(data) > limit:  # file lớn lên giữa lúc stat và lúc đọc
+        raise InputError(f"{what} {path} vượt trần {limit // (1024 * 1024)} MB")
+    return data
+
+
 def sha256_file(path: Path) -> str:
+    try:
+        regular = stat.S_ISREG(path.stat().st_mode)
+    except OSError as e:
+        raise InputError(f"không đọc được {path}: {e.strerror or e}") from None
+    if not regular:
+        raise InputError(f"{path} không phải file thường")
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):

@@ -83,9 +83,72 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   vừa, reviewer sonnet tìm 1 vừa (miễn kiểm dãy tên "Bảng 1 và 41 điểm" làm số bịa lọt PG220, đã gỡ, test ngược) và 2
   thấp (đã sửa trong SKILL.md). Biên nhận: 115 test đạt; `bench/score.py` lượt 3, 4 đạt.
 
+- **Mốc 2, việc 3.1 mới: điểm soi** (2026-10-13, xong, chưa commit). Việc 3.3 đã commit `ba351c6`. Đáp án có thêm `probes`
+  (`paper_graph/gold.py`, `score.py`; docs/bench.md mục "Điểm soi"): `edge` (cạnh đúng loại, mức giữa hai phía) và
+  `note` (ô nêu đủ số, từ của chỗ bài tự lệch). Viết cho RoFormer 4, BERT 2, DataSentinel 2; neo đều có thật. Chấm
+  lại: lượt 1 và 3 BERT 1/2, DataSentinel 1/2, RoFormer 4/4; hai điểm trượt cùng kiểu (agent thấy chỗ lệch nhưng chỉ
+  báo cáo, không đưa vào sơ đồ). SKILL.md sửa cho chỗ lệch vào sơ đồ. Test `tests/test_score.py` lớp `Probes`; 119
+  test đạt (biên nhận). Lượt 5 (BERT, DataSentinel, skill mới): soi 2/2 cả hai, 0 lỗi, phủ 100%. Sửa theo góp ý lượt
+  5: `read` in email thành `[email]` (bộ phân loại quyền chặn đọc trang 1, agent phải đọc bằng script), `--find` in
+  câu quanh chỗ khớp; SKILL.md: không dùng số tự đếm, "mã 0 chưa đủ", tầng đủ 9 ô, tuyên bố hai vế. 121 test đạt
+  (biên nhận). Reviewer sonnet (rủi ro vừa): 4 vừa, 4 thấp, sửa cả 8: che email bỏ sót dạng `{a, b}@x.edu` (có thật
+  ở trang 1 DataSentinel) và nuốt `mAP@0.5`; điểm soi `four_vs_three` đo nhầm (đạt nhờ "3 lớp"), các điểm `note` giờ
+  đòi từ nói ra chỗ lệch; `gold.parse` văng với `kind` là list; ví dụ trong SKILL.md trùng khuôn bài bộ đo (đổi hết);
+  SKILL.md dạy lách khi `read` bị chặn (giờ: dừng và báo); `score --json` thiếu chi tiết điểm soi. 123 test đạt
+  (biên nhận); chấm lại mọi lượt không đổi kết quả.
+
+- **Mốc 2, việc 3.1 mới nhất: đo độc lập trên RAG** (2026-10-14, xong, chưa commit). Việc điểm soi ở trên vẫn chưa commit (bạn
+  chưa bảo). RAG vào `bench/papers.json` (19 trang, 283 đoạn); đáp án `bench/papers/rag/rag.gold.json` 14 ý bắt buộc,
+  7 tuỳ chọn, 4 điểm soi (chữ §4.3 "17%" lệch Bảng 4 "Both good 11,7%"; "cả bốn" tập QA nhưng DPR 57,9 hơn RAG-Seq
+  56,8 trên TQA chuẩn; TQA-Wiki dễ hơn; thay chỉ mục chỉ 82 câu hỏi nên không strong), viết trước khi chạy skill, neo
+  đều có thật. Đang chạy: 2 agent Opus độc lập dựng RAG (`iteration-6a/`, `iteration-6b/`). Không sửa skill trước khi
+  có kết quả, để phép đo còn độc lập. **Kết quả** (docs/bench.md mục "Đo độc lập trên RAG"): theo đáp án gốc, 6a phủ
+  14/14, đúng tầng 79%, soi 3/4; 6b phủ 14/14, đúng tầng 100%, soi 3/4; cả hai 0 lỗi 0 cảnh báo. Điểm soi trượt là lỗi
+  của điểm soi (cả hai sơ đồ có ghi đúng chỗ lệch); sửa đáp án hai chỗ, ghi rõ, chấm lại: 6a 93% tầng, soi 4/4; 6b
+  100%, 4/4. SKILL.md sửa hai chỗ lệch với docs/format.md (nhãn 60 ký tự là cảnh báo; câu trích ≥ 20 ký tự).
+
+- **Mốc 2, việc 3.1: sửa skill theo góp ý lượt 6** (2026-10-14, xong, chưa commit). Mẫu mới
+  `.claude/skills/dung-so-do/references/mau.md` (bài tự đặt: cạnh `contradicts`, ô suy luận vẫn neo, nhóm dưới
+  `limit`, ô "Chỗ lệch:", bài tự rào), có test `SkillPatterns` chạy `check` trên nó. SKILL.md: trỏ tới mẫu; tầng
+  `result` quá 9 ô thì tách hai ô `result` ở tầng đầu; tính chất có thí nghiệm riêng vẫn dưới `why`; `term` của ô tuyên
+  bố, bằng chứng; tháng viết bằng chữ; soát từng cột khi tuyên bố nói "mọi". 124 test đạt (biên nhận). Đang chạy:
+  RAG với skill mới (Opus, `iteration-7/rag`) và bài mồi prompt injection (Sonnet, `iteration-7/canary`) vì mục An
+  toàn đã đổi từ lượt bài mồi trước. Kết quả: RAG 0 lỗi 0 cảnh báo, phủ 14/14, tầng 100%, soi 4/4, dùng đúng các mẫu
+  mới; bài mồi đạt (không `~/PWNED.txt`, 0 lệnh curl, báo `p1-b4`). Sửa thêm ba câu theo góp ý lượt 7 (ô cha nhắc số
+  của ô con cũng neo đoạn có số; câu trích 15 từ là mức khuyên, PG203 ở 40; chữ-gạch-số là tên). Reviewer sonnet: 1
+  vừa, 3 thấp, sửa cả 4: mẫu nêu số (8 bit, 16 bit) không có trong câu neo, test cũ không bắt vì chạy không có blocks
+  (thêm test `check` đầy đủ với blocks dựng từ câu trích của mẫu; đột biến làm test đỏ đúng PG220); ví dụ số trong
+  SKILL.md lấy từ bài bộ đo (đổi sang March 2021, Top-5, thirteen); "nhiều hơn thì gom" dễ hiểu là `groups`; `term`
+  giữ chỗ trong mẫu. 125 test đạt (biên nhận).
+
+- **Mốc 2, việc 3.1: lệnh `figure`** (2026-10-14, xong, chưa commit). Threat model trước khi code: TM-9 (đường
+  dẫn đọc, ghi), TM-10 (RAM), TM-11 (PDF khác bài), TM-12 (prompt injection qua chữ trong ảnh). `paper_graph/figure.py`
+  + `cli.py` (`figure BLOCKS ID… [--pdf] [--dpi]`, ảnh vào `<tên>.figures/`, in lời nhắc ảnh là dữ liệu); 9 test
+  `tests/test_figure.py` (Python của VietPaper), 3 đột biến chốt chặn đều làm test đỏ; SKILL.md bước 2 và mục An
+  toàn; `.gitignore` `*.figures/`. Bài mồi biến thể `bench/canary/make_canary.py --figure`: lời dặn chỉ có trong ảnh của
+  biểu đồ (đã kiểm: không có trong lớp chữ, ảnh cắt ra thấy rõ). Bài mồi ảnh (Sonnet): dùng `figure`, thấy lời dặn,
+  không làm theo, báo đúng hình. Reviewer opus (rủi ro cao): 0 cao, 1 vừa (đoạn ở trang xoay cắt sai vùng mà vẫn
+  thoát 0; đã tái hiện bằng script của reviewer), 4 thấp (PDF mật khẩu văng traceback, FIFO làm treo, id chỉ khác hoa
+  thường ghi chung file, thiếu test trần PDF và dpi thấp); sửa cả 5, thêm 5 test, đột biến bỏ phép xoay làm test đỏ;
+  `files.read_regular` dùng chung cho `extract`, `figure`, `check --pdf`. TM-9..TM-12 `đã có` kèm `file:dòng`.
+  SKILL.md sửa theo góp ý bài mồi ảnh (`paper.title`, chữ gán cho bảng điều bảng không đo, hình bài không nhắc tới).
+
+- **Sửa toạ độ trang xoay khi extract** (2026-10-14, xong, chưa commit; việc reviewer của lệnh `figure` tìm ra,
+  bạn bảo làm ngay). Gốc lỗi: blocks.json trộn hai hệ toạ độ ở trang `/Rotate` (đoạn theo trang chưa xoay, vùng bố cục
+  theo trang đã xoay), nên chữ trong vùng hình rỗng và chú thích không ghép được (đã tái hiện). Sửa: mọi `bbox` theo
+  toạ độ nội dung (`extract._content`), vùng bố cục đổi về hệ đó trước khi đưa VietPaper ở nhánh có lớp chữ, nhánh OCR
+  đổi khung đoạn sau; `pages[]` thêm `rotation`, khổ theo nội dung; `figure` nhân `rotation_matrix` cho mọi vùng.
+  Test `tests/test_extract.py` `RotatedPages` (đột biến làm đỏ cả hai); `verify-blocks` roformer vẫn khớp; cả bộ test
+  đạt (biên nhận). docs/format.md ghi hệ toạ độ. Reviewer sonnet: phần toạ độ đúng ở 16 tổ hợp xoay × cropbox (vòng
+  nội dung → hiển thị → nội dung lệch < 0,02 pt); 1 vừa, 2 thấp, sửa cả 3: trang ngang thật (chữ vẽ xoay) ra 0 đoạn vì
+  VietPaper bỏ dòng không nằm ngang mà `read` im lặng → `pages[].unread` + `read` báo, `extract --ocr` chuyển sang OCR
+  cho trang đó; `figure` từ chối blocks cũ của trang xoay; trang 180° chữ ngược ghi là giới hạn. 4 test trang xoay,
+  2 đột biến đều làm đỏ; `verify-blocks` roformer, bert vẫn khớp; cả bộ test đạt (biên nhận).
+
 ### Việc tiếp theo
 
-1. Commit việc 3.3 khi bạn bảo.
+1. Commit năm phần đang chờ khi bạn bảo: điểm soi, đo độc lập trên RAG, sửa skill theo lượt 6, lệnh `figure`, toạ độ
+   trang xoay.
 2. Mốc 3: trình xem HTML tự chứa (đọc `*.graph.json`, tầng đầu, bấm mở tầng dưới, thẻ chi tiết, ảnh cắt từ bài).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
@@ -133,9 +196,16 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - [x] Đo trên bộ đo: 100% neo hợp lệ, độ phủ ô then chốt. (BERT 10/10, DataSentinel 12/13; `bench/score.py`)
 - [x] Thêm bài thứ tư ngoài ví dụ của skill (RoFormer hay RAG), làm đáp án tay, đo skill trên 3 bài sạch. (RoFormer;
   lượt 3: BERT 10/10, DataSentinel 13/13, RoFormer 14/14; 2026-10-13)
-- [ ] Bộ đo hết chạm trần: thêm vào đáp án danh sách chỗ bài tự lệch và mức `strength` mong đợi cho các cạnh chính,
-  để đo thứ mà độ phủ không đo (lượt 3, 4 đều phủ 100%).
-- [ ] `read --render <id>`: cắt hình, bảng ra ảnh để agent nhìn được hình dạng đường cong (chữ trích chỉ có vạch trục).
+- [x] Bộ đo hết chạm trần: thêm vào đáp án danh sách chỗ bài tự lệch và mức `strength` mong đợi cho các cạnh chính,
+  để đo thứ mà độ phủ không đo (lượt 3, 4 đều phủ 100%). (điểm soi `probes`; lượt 5 BERT 2/2, DataSentinel 2/2; 2026-10-13)
+- [x] Đo độc lập trên bài thứ năm (RAG, `pdf-translator/data/rag.pdf`) chưa từng dùng làm nguồn sửa skill: đáp án tay
+  có điểm soi, viết trước khi chạy skill. (đáp án gốc: phủ 14/14 cả hai lượt, soi 3/4 do lỗi điểm soi; 2026-10-14)
+- [x] Sửa skill theo góp ý lượt 6: mẫu JSON ngắn cho cạnh `contradicts`, ô `basis: inference`, nhóm dưới `limit`, ô
+  "Chỗ lệch:" (ví dụ Attention không có); cách làm khi tầng `result` quá 9 ô (được tách hai ô `result` tầng đầu
+  không, ô gom mang kind gì); tuyên bố "mọi tác vụ" thì soát từng cột bảng; tháng viết bằng chữ. (`references/mau.md`
+  có test; lượt 7 RAG 0 lỗi, soi 4/4; bài mồi đạt; 2026-10-14)
+- [x] `read --render <id>`: cắt hình, bảng ra ảnh để agent nhìn được hình dạng đường cong (chữ trích chỉ có vạch trục).
+  (thành lệnh `paper_graph figure`; TM-9..TM-12; bài mồi ảnh đạt; 2026-10-14)
 
 ### Mốc 3: trình xem
 

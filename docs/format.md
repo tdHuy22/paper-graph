@@ -20,7 +20,15 @@ Hai file cho mỗi bài:
 ```
 
 - `page` đếm từ 1 theo thứ tự trang trong file PDF, không theo số in trên trang (số in, nếu PDF có khai báo, nằm ở `label`).
-- `bbox` theo điểm (pt) của trang PDF, gốc ở góc trên trái.
+- `bbox` theo điểm (pt) của trang PDF, gốc ở góc trên trái, theo **toạ độ nội dung**: trang chưa xoay, cùng hệ với
+  `get_text` của PyMuPDF, cho cả đoạn lẫn hình. Trang có `/Rotate` (trang ngang trong phụ lục) thì `pages[].rotation`
+  ghi góc xoay, `width`, `height` là khổ trước khi xoay; vẽ hay cắt ảnh từ trang đã render thì nhân `bbox` với
+  `page.rotation_matrix` (lệnh `figure` làm vậy). Quan hệ đọc (chú thích dưới hình, công thức sau đoạn) tính trên toạ
+  độ nội dung nên ở trang xoay 90°, 270° vẫn đúng. Giới hạn: trang xoay 180° mà chữ in ngược thì "trên", "dưới" bị
+  đảo khi đặt công thức trong `read`. Trang ngang thật thường vẽ chữ xoay sẵn: bộ gom đoạn của VietPaper bỏ dòng không
+  nằm ngang nên trang đó không ra đoạn nào; `pages[].unread` true đánh dấu trang có lớp chữ mà không trích được đoạn
+  nào (`read` báo ra), chạy lại `extract --ocr` thì trang đó đi đường OCR trên ảnh hiển thị.
+- `pages[].ocr` true: đoạn của trang lấy bằng OCR (trang scan, hay trang `unread` khi có `--ocr`).
 - `blocks[].label` lấy từ PP-DocLayoutV3: `text`, `abstract`, `paragraph_title`, `doc_title`, `figure_title`
   (chú thích hình hay bảng), `table` (một ô bảng), `algorithm`, `footnote`, `reference_content`…
 - `blocks[].text`: chữ như in, bỏ đậm nghiêng; công thức giữa câu thay bằng đúng các ký tự của nó trên trang (`dk`
