@@ -19,6 +19,7 @@ from .text import squash_index
 
 VERSION = 1
 FIGURE_KINDS = {"image", "chart", "table", "formula"}
+CONTEXT = 80  # số ký tự chữ gốc giữ lại mỗi bên chỗ khớp
 
 
 @dataclass
@@ -35,6 +36,8 @@ class Hit:
     page: int
     blocks: list[str]  # đoạn chứa câu trích; hai đoạn khi câu trích vắt qua chỗ ngắt đoạn, cột hay trang
     snippet: str  # đoạn gốc tương ứng, để in ra
+    before: str = ""  # chữ ngay trước và sau chỗ khớp (cùng trang), để `read --find` in cả câu quanh nó
+    after: str = ""
 
 
 @dataclass
@@ -74,8 +77,14 @@ class Blocks:
             # chỉ nhận khi hai đầu câu trích rơi đúng ranh giới từ hay số của bài: "score of 2" không khớp
             # "score of 28.4", "possible to train" không khớp "impossible to train"
             if brk[at] and (end == len(squashed) or brk[end]):
-                ids = [bid for a, z, bid in spans if a < end and z > at]
-                hits.append(Hit(page, ids, raw[where[at]: where[end - 1] + 1]))
+                inside = [(a, z, bid) for a, z, bid in spans if a < end and z > at]
+                a, z = where[at], where[end - 1] + 1
+                # ngữ cảnh không lấn sang đoạn khác: từ chữ đầu của đoạn đầu tới hết dòng chứa chữ cuối của đoạn cuối
+                # (giữ dấu câu cuối đoạn, mà squash bỏ đi); raw nối các đoạn bằng "\n"
+                lo = raw.rfind("\n", 0, where[inside[0][0]]) + 1
+                hi = raw.find("\n", where[inside[-1][1] - 1])
+                hits.append(Hit(page, [bid for *_, bid in inside], raw[a:z],
+                                raw[max(lo, a - CONTEXT):a], raw[z:min(hi, z + CONTEXT)]))
             at = squashed.find(quote_squashed, at + 1)
         return hits
 
