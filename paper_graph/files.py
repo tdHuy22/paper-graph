@@ -4,6 +4,7 @@ Chốt chặn TM-1 (file cố tình to) và TM-4 (đường dẫn trong sơ đ�
 """
 import hashlib
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -40,14 +41,23 @@ def read_json(path: Path, what: str, limit: int = MAX_JSON_BYTES):
         raise InputError(f"{what} {path} lồng quá sâu") from None
 
 
-def write_json(path: Path, doc) -> None:
-    """Ghi nguyên tử: file tạm rồi đổi tên, dừng giữa chừng thì file cũ còn nguyên."""
+def write_atomic(path: Path, data: bytes) -> None:
+    """Ghi nguyên tử qua file tạm tạo mới (O_EXCL, O_NOFOLLOW): dừng giữa chừng thì file cũ còn nguyên, và file tạm
+    có sẵn, kể cả symlink do ai đó đặt trước trong thư mục bài, không bao giờ được ghi theo (TM-9). Đổi tên đè lên
+    `path` thay chính mục đó, không đi theo symlink."""
     tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
     try:
-        tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
         tmp.replace(path)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def write_json(path: Path, doc) -> None:
+    write_atomic(path, (json.dumps(doc, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
 
 
 def read_regular(path: Path, what: str, limit: int) -> bytes:

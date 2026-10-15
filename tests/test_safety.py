@@ -123,6 +123,28 @@ class Limits(Workdir):  # TM-1
             files.read_json(p, "x")
 
 
+class PlantedTmp(Workdir):  # TM-9: file tạm `<tên>.tmp` có sẵn (symlink) trong thư mục bài không được ghi theo
+    def test_write_json_does_not_follow_planted_tmp(self):
+        victim = self.dir / "victim.txt"
+        victim.write_text("giữ nguyên", encoding="utf-8")
+        out = self.dir / "paper.blocks.json"
+        (self.dir / "paper.blocks.json.tmp").symlink_to(victim)
+        files.write_json(out, {"x": 1})
+        self.assertEqual(victim.read_text(encoding="utf-8"), "giữ nguyên")
+        self.assertFalse(out.is_symlink())
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8")), {"x": 1})
+        self.assertFalse((self.dir / "paper.blocks.json.tmp").exists())
+
+    def test_lone_surrogate_in_text_is_pg101(self):
+        g = graph()
+        node(g, "idea")["label"] = "ý \ud800"
+        p = self.dir / "toy.graph.json"
+        p.write_text(json.dumps(g))  # ensure_ascii: file chứa chuỗi thoát "\ud800", JSON hợp lệ
+        code, out, _ = run_cli("check", str(p))
+        self.assertNotEqual(code, 0)
+        self.assertIn("PG101", out)
+
+
 class BrokenInputs(Workdir):  # review: traceback thay vì mã 2
     def test_huge_integer(self):
         p = self.dir / "big.graph.json"

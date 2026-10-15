@@ -10,12 +10,11 @@ Chữ trích từ biểu đồ chỉ có vạch trục; muốn tả hình dạng
 - ảnh là nội dung bài: người gọi in kèm lời nhắc chữ trong ảnh là dữ liệu (TM-12, `cli.cmd_figure`).
 """
 import hashlib
-import os
 from pathlib import Path
 
 from . import blocks as blocks_mod
 from .extract import MAX_PDF_BYTES
-from .files import InputError, read_json, read_regular, sibling
+from .files import InputError, read_json, read_regular, sibling, write_atomic
 from .model import ID
 
 MAX_SIDE = 4000  # px, cạnh dài nhất của ảnh
@@ -52,20 +51,6 @@ def _safe_dir(blocks_path: Path) -> Path:
     if not real.is_dir() or not real.is_relative_to(root) or real == root:
         raise InputError(f"{d} không nằm trong thư mục của blocks.json")
     return real
-
-
-def _write_new(path: Path, data: bytes) -> None:
-    """Ghi nguyên tử qua file tạm tạo mới (O_EXCL, O_NOFOLLOW): file tạm có sẵn, kể cả symlink do ai đó đặt trước,
-    không bao giờ được ghi theo. Đổi tên đè lên `path` thay chính mục đó, không đi theo symlink."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.unlink(missing_ok=True)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        tmp.replace(path)
-    finally:
-        tmp.unlink(missing_ok=True)
 
 
 def render(blocks_path: Path, ids: list[str], pdf: Path | None = None, dpi: int = DEFAULT_DPI) -> list[dict]:
@@ -125,6 +110,6 @@ def render(blocks_path: Path, ids: list[str], pdf: Path | None = None, dpi: int 
             except (ValueError, RuntimeError) as e:  # trang hỏng, tài liệu bị khoá giữa chừng
                 raise InputError(f"{fid}: không render được trang {page_no}: {e}") from None
             path = dest / f"{fid}.png"
-            _write_new(path, pix.tobytes("png"))
+            write_atomic(path, pix.tobytes("png"))
             out.append({"id": fid, "path": path, "page": page_no, "width": pix.width, "height": pix.height})
     return out

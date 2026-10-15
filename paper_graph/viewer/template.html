@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<header class="top">
+  <p class="eyebrow">Sơ đồ bài báo</p>
+  <h1 id="title"></h1>
+  <div class="bar">
+    <nav id="crumbs" aria-label="Đường dẫn tầng"></nav>
+    <button id="figs" class="figs" type="button" hidden></button>
+  </div>
+</header>
+<main class="layout">
+  <section id="canvas" aria-label="Sơ đồ của tầng đang xem" tabindex="-1">
+    <svg id="svg" role="group" aria-label="Các ô của tầng"></svg>
+  </section>
+  <aside id="card" aria-live="polite" aria-label="Chi tiết ô" tabindex="-1"></aside>
+</main>
+<footer class="foot" id="foot"></footer>
+<dialog id="zoom" aria-labelledby="zoom-cap">
+  <figure>
+    <img id="zoom-img" alt="">
+    <figcaption id="zoom-cap"></figcaption>
+  </figure>
+  <button id="zoom-close" type="button">Đóng</button>
+</dialog>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>{{SCRIPT}}</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ Mô tả sản phẩm ở [README.md](README.md); file này chỉ ghi trạng th
 
 ## §0 Đang ở đâu, việc tiếp theo
 
-Cập nhật 2026-10-13.
+Cập nhật 2026-10-15.
 
 ### Đã xong, có bằng chứng
 
@@ -145,11 +145,34 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   cho trang đó; `figure` từ chối blocks cũ của trang xoay; trang 180° chữ ngược ghi là giới hạn. 4 test trang xoay,
   2 đột biến đều làm đỏ; `verify-blocks` roformer, bert vẫn khớp; cả bộ test đạt (biên nhận).
 
+- **Mốc 3, việc 4.1: trình xem HTML** (2026-10-14, xong; commit cùng phần hình và bảng). `python -m paper_graph view BAI.graph.json` ghi một HTML tự chứa chạy offline. Bố cục tính bằng Python
+  (`paper_graph/layout.py`, dàn theo lớp, nhóm dàn riêng rồi thu thành khối) thay cho elkjs: không phải tải và nhúng
+  thư viện 1,5 MB giấy phép EPL, kiểm được bằng unittest, lưu được toạ độ cho 4.3; trên sơ đồ mẫu và 11 sơ đồ do
+  skill dựng: không chồng ô, nhóm chỉ bao thành viên. Trang (`paper_graph/viewer/`): tầng đầu, bấm ô ra thẻ (giải
+  thích, câu trích kèm trang và ảnh đoạn gốc, hình của bài, các cạnh), ô ▸ mở tầng dưới, đường dẫn tầng, Escape lùi,
+  bàn phím, màn hẹp, chế độ tối. Threat model TM-13..TM-15 `đã có`: dữ liệu nhúng thoát ký tự, chỉ `textContent`, CSP
+  theo hash, ảnh chỉ PNG của `figure`. Reviewer opus: thử trong Chrome, TM-13..15 đứng vững; 2 vừa, 4 thấp, sửa cả 6
+  (ghi qua symlink `.tmp` cài sẵn → `files.write_atomic` dùng chung cho `view`, `figure`, `extract`; chọn ô mất focus
+  bàn phím; id `g:<nhóm>` trùng khoá nhóm; surrogate lẻ → PG101; thứ tự Tab theo hình; nhãn nhóm ngắt dòng). Đột biến
+  từng chốt chặn đều làm test đỏ (trừ `O_NOFOLLOW`, thừa vì `O_EXCL` đã chặn symlink). Thử phím thật trong trình
+  duyệt: Enter chọn, Enter lần hai mở tầng, Tab theo hình, Escape về ô cha, link "Nối với" và đổi cỡ giữ focus.
+  Cả bộ test đạt trên hai Python (159 test, biên nhận). Bản dịch trong thẻ chuyển sang Mốc 4. `.claude/launch.json`
+  (máy chủ tĩnh để thử) không commit.
+
+- **Mốc 3: hình và bảng gắn vào ô liên quan** (2026-10-15, xong; commit cùng trình xem).
+  `paper_graph/figlinks.py` gắn hình cho ô theo 5 lý do: `figure` của ô, câu trích nằm ở chú thích, ô nhắc "Bảng 2"/
+  "Table 2", hình của ô bằng chứng nối vào (supports/contradicts), hình ở tầng dưới; tối đa 6 hình mỗi ô. Thẻ hiện hình
+  kèm lý do và nút tới ô trung gian; bấm hình phóng to (dialog, Escape chỉ đóng hình); nút "Hình và bảng (n)" liệt kê
+  mọi hình kèm ô dùng nó. Ô có hình: RAG 14 → 26/50, BERT 14 → 24/40; soát tay các ca `mention`, `caption`: đúng cả.
+  Test `tests/test_figlinks.py` (6), đột biến các nhánh đều làm đỏ (trừ `\b` ở regex chú thích, tương đương); cả bộ
+  test đạt trên hai Python (biên nhận). Thử trong trình duyệt: phím, Escape ở tầng dưới, danh sách hình, màn hẹp, chế
+  độ tối, console sạch. TM-13 ghi thêm chữ chú thích. Reviewer sonnet: TM-13..15 đứng vững; 3 thấp, sửa cả 3 (link
+  ngược trong danh sách hình chỉ tới ô thật sự hiện hình; một vùng ảnh hỏng chỉ mất ảnh đó, chân trang báo id;
+  nhận "Figure 1a", "Tables 1 and 2", "Hình 1, 2 và 3"), có test; cả bộ test đạt (biên nhận).
+
 ### Việc tiếp theo
 
-1. Commit năm phần đang chờ khi bạn bảo: điểm soi, đo độc lập trên RAG, sửa skill theo lượt 6, lệnh `figure`, toạ độ
-   trang xoay.
-2. Mốc 3: trình xem HTML tự chứa (đọc `*.graph.json`, tầng đầu, bấm mở tầng dưới, thẻ chi tiết, ảnh cắt từ bài).
+1. Mốc 3: sửa nhãn, khoá ô, kéo thả; giữ toạ độ giữa các lần dựng lại.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -209,14 +232,15 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 
 ### Mốc 3: trình xem
 
-- [ ] HTML tự chứa, chạy offline: tầng đầu, bấm mở tầng dưới, thẻ chi tiết có
-  trích dẫn, ảnh cắt đúng đoạn và bản dịch.
-- [ ] Hình và bảng của bài gắn vào ô liên quan.
+- [x] HTML tự chứa, chạy offline: tầng đầu, bấm mở tầng dưới, thẻ chi tiết có
+  trích dẫn, ảnh cắt đúng đoạn (bản dịch chuyển sang Mốc 4: cần VietPaper).
+- [x] Hình và bảng của bài gắn vào ô liên quan.
 - [ ] Sửa nhãn, khoá ô, kéo thả; giữ toạ độ giữa các lần dựng lại.
 
 ### Mốc 4: gắn vào VietPaper
 
 - [ ] Tab "Sơ đồ" cạnh bản dịch; bấm ô thì cuộn hai khung tới đúng đoạn.
+- [ ] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper).
 - [ ] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code.
 
 ### Mốc 5: học bằng cách dựng

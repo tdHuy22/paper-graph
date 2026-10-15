@@ -117,7 +117,7 @@ Câu trích có ở nhiều chỗ trên trang (thân bài và chú thích hình)
 
 | Mã | Mức | Nghĩa |
 | --- | --- | --- |
-| PG101 | lỗi | thiếu trường, sai kiểu, chuỗi quá dài |
+| PG101 | lỗi | thiếu trường, sai kiểu, chuỗi quá dài hay có ký tự Unicode hỏng (surrogate lẻ) |
 | PG102 | lỗi | giá trị không có trong tập cho phép (`kind`, `basis`, `status`, `strength`) |
 | PG103 | lỗi | id sai dạng |
 | PG104 | lỗi | id trùng |

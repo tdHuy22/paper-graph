@@ -4,6 +4,7 @@
     verify-blocks BAI.pdf BAI.blocks.json                                  trích lại, so với blocks đã có
     read          BAI.blocks.json [--pages 1-3] [--find CỤM] [--all]        in chữ bài kèm id đoạn
     figure        BAI.blocks.json ID… [--pdf F] [--dpi 200]                cắt hình, bảng, đoạn ra PNG để nhìn
+    view          BAI.graph.json [-o BAI.html] [--pdf F] [--no-images]    xuất trình xem HTML tự chứa, chạy offline
     score         BAI.graph.json BAI.gold.json [--json] [--min-coverage 0.8] chấm theo đáp án tay
     check         BAI.graph.json [--blocks F] [--pdf F] [--base CŨ] [--json] [--strict]
                                                                            kiểm sơ đồ với bài gốc
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from . import blocks as blocks_mod
 from .check import check, parse_graph, render
-from .files import InputError, read_json, sha256_file, sibling, write_json
+from .files import InputError, read_json, sha256_file, sibling, write_atomic, write_json
 from .text import safe
 
 
@@ -203,6 +204,21 @@ def cmd_figure(a) -> int:
     return 0
 
 
+def cmd_view(a) -> int:
+    from .view import build  # noqa: PLC0415
+
+    graph = Path(a.graph)
+    page, stats = build(graph, Path(a.blocks) if a.blocks else None, Path(a.pdf) if a.pdf else None,
+                        images=not a.no_images, crops=not a.no_crops)
+    out = Path(a.output) if a.output else graph.with_name(graph.name.removesuffix(".graph.json") + ".html")
+    write_atomic(out, page.encode("utf-8"))
+    print(f"{safe(str(out), 500)}: {stats['nodes']} ô, {stats['tiers']} tầng, {stats['images']} ảnh, "
+          f"{stats['bytes'] // 1024} KB")
+    if stats["note"]:
+        print(safe(stats["note"], 500))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="paper-graph", description="Sơ đồ nhiều tầng cho bài báo, mỗi ô neo về bài gốc")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -251,6 +267,15 @@ def main(argv=None) -> int:
     f.add_argument("--pdf", help="PDF gốc (mặc định: source.file cạnh blocks.json)")
     f.add_argument("--dpi", type=int, default=200)
     f.set_defaults(fn=cmd_figure)
+
+    w = sub.add_parser("view", help="xuất trình xem HTML tự chứa, chạy offline (ảnh cần Python của VietPaper)")
+    w.add_argument("graph")
+    w.add_argument("-o", "--output", help="mặc định: cạnh sơ đồ, đuôi .html")
+    w.add_argument("--blocks", help="mặc định: paper.blocks trong sơ đồ")
+    w.add_argument("--pdf", help="PDF gốc để cắt ảnh (mặc định: source.file cạnh blocks.json)")
+    w.add_argument("--no-images", action="store_true", help="không nhúng ảnh nào")
+    w.add_argument("--no-crops", action="store_true", help="không nhúng ảnh đoạn gốc của câu trích (file nhẹ hơn)")
+    w.set_defaults(fn=cmd_view)
     c.set_defaults(fn=cmd_check)
 
     a = p.parse_args(argv)

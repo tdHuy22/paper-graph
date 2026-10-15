@@ -99,6 +99,11 @@ def _text(d: _Diags, where: str, name: str, v, limit: int, required: bool) -> st
     if len(v) > limit:
         d.err("PG101", where, f"`{name}` dài {len(v)} ký tự, quá {limit}")
         return v[:limit]
+    try:
+        v.encode("utf-8")
+    except UnicodeEncodeError:  # "\ud800" trong JSON: không ghi ra UTF-8 được, trình xem và VietPaper sẽ vỡ
+        d.err("PG101", where, f"`{name}` có ký tự Unicode hỏng (surrogate lẻ)")
+        return v.encode("utf-8", "replace").decode("utf-8")
     return v
 
 

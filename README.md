@@ -38,7 +38,14 @@ python3 -m paper_graph check bai.graph.json --pdf bai.pdf --json --strict
 python3 -m paper_graph read bai.blocks.json --pages 1-5
 python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
 ../pdf-translator/.venv/bin/python -m paper_graph figure bai.blocks.json p8-f1   # cắt hình ra bai.figures/p8-f1.png
+../pdf-translator/.venv/bin/python -m paper_graph view bai.graph.json            # trình xem bai.html, chạy offline
 ```
+
+`view` ghi một file HTML tự chứa: tầng đầu, bấm ô để xem giải thích và câu trích nguyên văn (kèm ảnh đoạn gốc),
+ô có ▸ mở ra tầng dưới. Thẻ của ô hiện các hình, bảng liên quan, kèm lý do gắn: trường `figure` của ô, câu trích nằm ở
+chú thích, ô nhắc "Bảng 2", hình của ô bằng chứng nối vào, hay hình ở tầng dưới. Bấm hình để phóng to; nút "Hình và
+bảng" liệt kê mọi hình của bài kèm các ô dùng nó. Chạy bằng `python3` thường cũng được, chỉ là không có ảnh (cắt ảnh
+cần PyMuPDF). Sơ đồ phải qua `check` 0 lỗi mới xuất được.
 
 Dựng sơ đồ: trong repo này, nhờ Claude Code "dựng sơ đồ cho bài X". Skill
 [dung-so-do](.claude/skills/dung-so-do/SKILL.md) đọc bài bằng `read`, viết `bai.graph.json`, chạy `check` và sửa tới khi

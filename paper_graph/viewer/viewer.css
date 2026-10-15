@@ -1,0 +1,139 @@
+:root {
+  --bg: #f7f6f2;
+  --panel: #ffffff;
+  --ink: #1d1d1b;
+  --ink-soft: #5c5b55;
+  --line: #d8d5cc;
+  --edge: #8a877d;
+  --accent: #2f5d8a;
+  --focus: #c2410c;
+  --good: #2e7d4f;
+  --bad: #b3261e;
+  --k-problem: #f6d7d2; --k-idea: #fbe7b5; --k-method: #d5e5f6; --k-why: #e3dcf3; --k-result: #d6eedd;
+  --k-limit: #eee2d6; --k-context: #e6e6e1; --k-step: #e1ecf7; --k-io: #edf2f7; --k-concept: #efe8fa;
+  --k-claim: #dff1e5; --k-evidence: #f3f0e6;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 2px 8px rgba(0, 0, 0, .05);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171716; --panel: #22221f; --ink: #ecebe6; --ink-soft: #a9a79f; --line: #3b3a35; --edge: #8d8a80;
+    --accent: #8fb6dc; --focus: #f59e0b; --good: #6cc391; --bad: #f08b84;
+    --k-problem: #4a2c28; --k-idea: #4a3d1c; --k-method: #23384d; --k-why: #352d4a; --k-result: #23402d;
+    --k-limit: #43372b; --k-context: #34342f; --k-step: #26394b; --k-io: #2c333b; --k-concept: #382f4a;
+    --k-claim: #24402e; --k-evidence: #3b3729;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 15px/1.5 -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif; }
+.top { padding: 20px 24px 8px; }
+.eyebrow { margin: 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+h1 { margin: 4px 0 10px; font-size: 22px; line-height: 1.3; font-weight: 650; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.figs { font: inherit; font-size: 14px; color: var(--accent); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+.figs:hover { border-color: var(--accent); }
+#crumbs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 14px; }
+#crumbs button { font: inherit; color: var(--accent); background: none; border: 0; padding: 2px 4px; cursor: pointer;
+  border-radius: 6px; }
+#crumbs button:hover { text-decoration: underline; }
+#crumbs .here { font-weight: 600; padding: 2px 4px; }
+#crumbs .sep { color: var(--ink-soft); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 8px 24px 24px;
+  align-items: start; }
+#canvas { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: auto; max-height: calc(100vh - 150px); }
+#svg { display: block; }
+#card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px 18px 20px; position: sticky; top: 12px; max-height: calc(100vh - 24px);
+  overflow: auto; }
+.foot { padding: 0 24px 24px; font-size: 13px; color: var(--ink-soft); }
+@media (max-width: 860px) {
+  .top { padding: 16px 16px 6px; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 8px 16px 16px; }
+  #card { position: static; max-height: none; }
+  #canvas { max-height: 70vh; }
+  .foot { padding: 0 16px 16px; }
+}
+
+/* sơ đồ */
+.node .box { stroke: var(--line); stroke-width: 1; cursor: pointer; }
+.node text { fill: var(--ink); font-size: 13px; pointer-events: none; }
+.node:hover .box { stroke: var(--accent); stroke-width: 1.5; }
+.node:focus { outline: none; }
+/* ô đang chọn: viền đậm cam; focus bàn phím: vòng xanh nét đứt bên ngoài, nên thấy được cả hai cùng lúc */
+.node.sel .box { stroke: var(--focus); stroke-width: 2.5; }
+.node .ring { fill: none; stroke: none; pointer-events: none; }
+.node:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.node .badge { fill: var(--accent); font-size: 11px; font-weight: 600; }
+.node.inference .box { stroke-dasharray: 5 3; stroke: var(--ink-soft); }
+.node.inference.sel .box { stroke: var(--focus); }
+.k-problem .box { fill: var(--k-problem); } .k-idea .box { fill: var(--k-idea); } .k-method .box { fill: var(--k-method); }
+.k-why .box { fill: var(--k-why); } .k-result .box { fill: var(--k-result); } .k-limit .box { fill: var(--k-limit); }
+.k-context .box { fill: var(--k-context); } .k-step .box { fill: var(--k-step); } .k-io .box { fill: var(--k-io); }
+.k-concept .box { fill: var(--k-concept); } .k-claim .box { fill: var(--k-claim); }
+.k-evidence .box { fill: var(--k-evidence); }
+.edge path { fill: none; stroke: var(--edge); stroke-width: 1.6; }
+.edge.relates path { stroke-dasharray: 5 4; }
+.edge.supports path { stroke: var(--good); }
+.edge.contradicts path { stroke: var(--bad); stroke-dasharray: 7 4; }
+.edge.weak path { stroke-width: 1.1; } .edge.strong path { stroke-width: 2.6; }
+.edge text { fill: var(--ink-soft); font-size: 11.5px; }
+.edge .halo { stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; fill: var(--panel); }
+.grp rect { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.grp text { fill: var(--ink-soft); font-size: 12px; font-weight: 600; }
+marker path { fill: var(--edge); } marker.supports path { fill: var(--good); } marker.contradicts path { fill: var(--bad); }
+
+/* thẻ chi tiết */
+.kind { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px;
+  border-radius: 999px; background: var(--k-context); color: var(--ink); }
+#card h2 { font-size: 18px; line-height: 1.35; margin: 10px 0 4px; }
+.term { margin: 0 0 10px; color: var(--ink-soft); font-size: 13.5px; font-style: italic; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.tag { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink-soft); }
+.tag.warn { border-color: var(--focus); color: var(--focus); }
+.explain { margin: 0 0 14px; }
+#card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); margin: 18px 0 8px; }
+blockquote { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--bg);
+  border-radius: 0 8px 8px 0; font-size: 14px; }
+blockquote .where { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-soft); font-style: normal; }
+details { margin: 4px 0 0; } summary { cursor: pointer; font-size: 12.5px; color: var(--accent); }
+.shot { display: block; max-width: 100%; height: auto; margin-top: 6px; border: 1px solid var(--line);
+  border-radius: 6px; background: #fff; }
+.open { margin-top: 4px; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0;
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.open:hover { filter: brightness(1.08); }
+.links { list-style: none; margin: 0; padding: 0; }
+.links li { margin: 0 0 6px; font-size: 14px; }
+.links button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer;
+  text-align: left; }
+.links button:hover { text-decoration: underline; }
+.muted { color: var(--ink-soft); font-size: 14px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* hình, bảng */
+.fig { margin: 0 0 16px; }
+.fig figcaption { font-size: 13.5px; margin-top: 4px; }
+.fig-name { font-weight: 600; }
+.fig-cap { margin-top: 2px; color: var(--ink-soft); font-size: 13px; display: -webkit-box;
+  -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.thumb { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; text-align: left; }
+.thumb .shot { margin-top: 0; }
+.inline { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.inline:hover { text-decoration: underline; }
+.users { margin: 6px 0 4px; font-size: 13.5px; }
+.fig { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.fig:last-child { border-bottom: 0; }
+#card:focus { outline: none; }
+#zoom { max-width: min(96vw, 1400px); max-height: 94vh; padding: 16px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel); color: var(--ink); }
+#zoom::backdrop { background: rgba(0, 0, 0, .6); }
+#zoom figure { margin: 0; }
+#zoom img { display: block; max-width: 100%; max-height: 78vh; margin: 0 auto; background: #fff; border-radius: 6px; }
+#zoom figcaption { margin-top: 10px; font-size: 14px; max-width: 80ch; }
+#zoom-close { margin-top: 12px; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0;
+  border-radius: 8px; padding: 6px 14px; cursor: pointer; }
