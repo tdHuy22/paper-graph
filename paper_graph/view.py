@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 from . import blocks as blocks_mod
-from . import figlinks
+from . import edits, figlinks
 from .check import check, parse_graph
 from .files import InputError, read_json, sibling
 from .layout import layout_graph
@@ -78,9 +78,10 @@ def _images(blocks_path: Path, ids: list[str], pdf: Path | None, dpi: int) -> tu
     return out, bad
 
 
-def build(graph_path: Path, blocks_path: Path | None = None, pdf: Path | None = None,
-          images: bool = True, crops: bool = True) -> tuple[str, dict]:
-    """HTML của trình xem và vài số liệu (số ô, số ảnh, ghi chú). Sơ đồ phải qua `check` 0 lỗi."""
+def build_data(graph_path: Path, blocks_path: Path | None = None, pdf: Path | None = None,
+               images: bool = True, crops: bool = True) -> tuple[dict, dict]:
+    """Dữ liệu nhúng của trình xem và vài số liệu (số ô, số ảnh, ghi chú). Sơ đồ phải qua `check` 0 lỗi. Toạ độ ô
+    đã kéo lấy từ `bai.layout.json` cạnh sơ đồ nếu có."""
     graph, diags = parse_graph(read_json(graph_path, "sơ đồ"))
     if graph is None:
         raise InputError(f"{graph_path} không đọc được như một sơ đồ: chạy check trước")
@@ -93,7 +94,8 @@ def build(graph_path: Path, blocks_path: Path | None = None, pdf: Path | None = 
     if rep.errors:
         raise InputError(f"sơ đồ còn {rep.errors} lỗi theo `check`: sửa trước khi xuất trình xem")
 
-    tiers = layout_graph(graph)
+    pins, pin_note = edits.read_pins(edits.layout_path(graph_path), graph)
+    tiers = layout_graph(graph, pins)
     children: dict[str, int] = {}
     for n in graph.nodes.values():
         if n.parent:
@@ -138,18 +140,33 @@ def build(graph_path: Path, blocks_path: Path | None = None, pdf: Path | None = 
             "edges": [{"from": e.src, "to": e.dst, "kind": e.kind, "strength": e.strength, "label": e.label}
                       for e in graph.edges],
             "figures": figures, "images": pictures,
-            "note": note or (f"Sơ đồ đã qua kiểm tra: {rep.stats.get('anchors_ok', 0)} câu trích có thật trong bài. "
-                             "Câu trích chứng minh câu đó có trong bài, không chứng minh ô diễn giải đúng.")}
+            "note": " ".join(x for x in (note, pin_note) if x) or (
+                f"Sơ đồ đã qua kiểm tra: {rep.stats.get('anchors_ok', 0)} câu trích có thật trong bài. "
+                "Câu trích chứng minh câu đó có trong bài, không chứng minh ô diễn giải đúng.")}
+    stats = {"nodes": len(nodes), "tiers": len(tiers), "figures": len(figures), "images": len(pictures),
+             "note": " ".join(x for x in (note, pin_note) if x)}
+    return data, stats
 
+
+def page(data: dict, edit: dict | None = None) -> str:
+    """HTML tự chứa. `edit` ({token, version}) bật chế độ sửa khi trang do `serve` phục vụ: CSP thêm
+    `connect-src 'self'` để trang gửi sửa đổi về đúng server đó."""
+    if edit is not None:
+        data = dict(data, edit=edit)
     style = (ASSETS / "viewer.css").read_text("utf-8")
     script = (ASSETS / "viewer.js").read_text("utf-8")
     csp = (f"default-src 'none'; script-src {_sha(script)}; style-src {_sha(style)}; img-src data:; "
-           "base-uri 'none'; form-action 'none'")
+           + ("connect-src 'self'; " if edit is not None else "") + "base-uri 'none'; form-action 'none'")
     template = (ASSETS / "template.html").read_text("utf-8")
-    values = {"CSP": csp, "TITLE": html.escape(graph.title or "Sơ đồ bài báo", quote=True), "STYLE": style,
+    values = {"CSP": csp, "TITLE": html.escape(data.get("title") or "Sơ đồ bài báo", quote=True), "STYLE": style,
               "DATA": _json_for_html(data), "SCRIPT": script}
     # thay một lượt trên template: chữ của sơ đồ có "{{SCRIPT}}" cũng không bị thay lần nữa
-    page = re.sub(r"\{\{([A-Z]+)\}\}", lambda mt: values[mt.group(1)], template)
-    stats = {"nodes": len(nodes), "tiers": len(tiers), "figures": len(figures), "images": len(pictures), "note": note,
-             "bytes": len(page.encode())}
-    return page, stats
+    return re.sub(r"\{\{([A-Z]+)\}\}", lambda mt: values[mt.group(1)], template)
+
+
+def build(graph_path: Path, blocks_path: Path | None = None, pdf: Path | None = None,
+          images: bool = True, crops: bool = True) -> tuple[str, dict]:
+    """HTML của trình xem (chỉ đọc) và số liệu."""
+    data, stats = build_data(graph_path, blocks_path, pdf, images, crops)
+    html_page = page(data)
+    return html_page, dict(stats, bytes=len(html_page.encode()))

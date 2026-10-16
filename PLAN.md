@@ -4,7 +4,7 @@ Mô tả sản phẩm ở [README.md](README.md); file này chỉ ghi trạng th
 
 ## §0 Đang ở đâu, việc tiếp theo
 
-Cập nhật 2026-10-15.
+Cập nhật 2026-10-16.
 
 ### Đã xong, có bằng chứng
 
@@ -32,7 +32,7 @@ Cập nhật 2026-10-15.
   câu cần chốt, mốc, rủi ro. Nguồn HTML ở scratchpad của phiên 2026-10-12; lấy
   lại bằng Artifact `read`.
 
-- **Mốc 1: lõi kiểm được** (2026-10-12, chưa commit). Gói `paper_graph` (Python 3.11, lõi chỉ thư viện chuẩn):
+- **Mốc 1: lõi kiểm được** (2026-10-12). Gói `paper_graph` (Python 3.11, lõi chỉ thư viện chuẩn):
   `extract` (PDF → `*.blocks.json` qua bộ gom đoạn của VietPaper; công thức giữa câu lấy đúng ký tự theo danh sách
   VietPaper ghi, không cắt theo khung), `check` (PG1xx dạng file, PG2xx neo, PG3xx tầng; docs/format.md),
   `verify-blocks` (trích lại rồi so). Bộ đo 3 bài ghim SHA-256 (`bench/papers.json`, `bench/prepare.py`), sơ đồ mẫu
@@ -72,7 +72,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - **Luật chặn quyền cứng** (F3 của review, `.claude/settings.json` với `permissions.deny` cho mạng và lệnh tải): bạn
   chọn chưa thêm (2026-10-13, "chỉ commit thôi"). TM-6 vẫn chỉ dựa vào chỉ dẫn trong skill và lời nhắc của `read`.
 - Phiên làm việc đã chuyển sang thư mục project (2026-10-13).
-- **Mốc 2, việc 3.3** (2026-10-13, xong, chưa commit). Bài thứ tư RoFormer (`roformer-rope.pdf`, nặng công thức) vào
+- **Mốc 2, việc 3.3** (2026-10-13, xong). Bài thứ tư RoFormer (`roformer-rope.pdf`, nặng công thức) vào
   `bench/papers.json`; đáp án tay `bench/papers/roformer/roformer.gold.json` 14 ý bắt buộc, 9 tuỳ chọn, viết trước khi
   xem sơ đồ của skill (sửa một lần sau lượt 4, ghi trong docs/bench.md). Lượt đo 3, 3 subagent Opus trên 3 bài sạch
   (`.tmp/dung-so-do-workspace/iteration-3/`): BERT 10/10, DataSentinel 13/13, RoFormer 14/14, cả ba 0 lỗi; độ phủ chạm
@@ -83,7 +83,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   vừa, reviewer sonnet tìm 1 vừa (miễn kiểm dãy tên "Bảng 1 và 41 điểm" làm số bịa lọt PG220, đã gỡ, test ngược) và 2
   thấp (đã sửa trong SKILL.md). Biên nhận: 115 test đạt; `bench/score.py` lượt 3, 4 đạt.
 
-- **Mốc 2, việc 3.1 mới: điểm soi** (2026-10-13, xong, chưa commit). Việc 3.3 đã commit `ba351c6`. Đáp án có thêm `probes`
+- **Mốc 2, việc 3.1 mới: điểm soi** (2026-10-13, xong). Việc 3.3 đã commit `ba351c6`. Đáp án có thêm `probes`
   (`paper_graph/gold.py`, `score.py`; docs/bench.md mục "Điểm soi"): `edge` (cạnh đúng loại, mức giữa hai phía) và
   `note` (ô nêu đủ số, từ của chỗ bài tự lệch). Viết cho RoFormer 4, BERT 2, DataSentinel 2; neo đều có thật. Chấm
   lại: lượt 1 và 3 BERT 1/2, DataSentinel 1/2, RoFormer 4/4; hai điểm trượt cùng kiểu (agent thấy chỗ lệch nhưng chỉ
@@ -97,7 +97,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   SKILL.md dạy lách khi `read` bị chặn (giờ: dừng và báo); `score --json` thiếu chi tiết điểm soi. 123 test đạt
   (biên nhận); chấm lại mọi lượt không đổi kết quả.
 
-- **Mốc 2, việc 3.1 mới nhất: đo độc lập trên RAG** (2026-10-14, xong, chưa commit). Việc điểm soi ở trên vẫn chưa commit (bạn
+- **Mốc 2, việc 3.1 mới nhất: đo độc lập trên RAG** (2026-10-14, xong). Việc điểm soi ở trên vẫn chưa commit (bạn
   chưa bảo). RAG vào `bench/papers.json` (19 trang, 283 đoạn); đáp án `bench/papers/rag/rag.gold.json` 14 ý bắt buộc,
   7 tuỳ chọn, 4 điểm soi (chữ §4.3 "17%" lệch Bảng 4 "Both good 11,7%"; "cả bốn" tập QA nhưng DPR 57,9 hơn RAG-Seq
   56,8 trên TQA chuẩn; TQA-Wiki dễ hơn; thay chỉ mục chỉ 82 câu hỏi nên không strong), viết trước khi chạy skill, neo
@@ -107,7 +107,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   của điểm soi (cả hai sơ đồ có ghi đúng chỗ lệch); sửa đáp án hai chỗ, ghi rõ, chấm lại: 6a 93% tầng, soi 4/4; 6b
   100%, 4/4. SKILL.md sửa hai chỗ lệch với docs/format.md (nhãn 60 ký tự là cảnh báo; câu trích ≥ 20 ký tự).
 
-- **Mốc 2, việc 3.1: sửa skill theo góp ý lượt 6** (2026-10-14, xong, chưa commit). Mẫu mới
+- **Mốc 2, việc 3.1: sửa skill theo góp ý lượt 6** (2026-10-14, xong). Mẫu mới
   `.claude/skills/dung-so-do/references/mau.md` (bài tự đặt: cạnh `contradicts`, ô suy luận vẫn neo, nhóm dưới
   `limit`, ô "Chỗ lệch:", bài tự rào), có test `SkillPatterns` chạy `check` trên nó. SKILL.md: trỏ tới mẫu; tầng
   `result` quá 9 ô thì tách hai ô `result` ở tầng đầu; tính chất có thí nghiệm riêng vẫn dưới `why`; `term` của ô tuyên
@@ -121,7 +121,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   SKILL.md lấy từ bài bộ đo (đổi sang March 2021, Top-5, thirteen); "nhiều hơn thì gom" dễ hiểu là `groups`; `term`
   giữ chỗ trong mẫu. 125 test đạt (biên nhận).
 
-- **Mốc 2, việc 3.1: lệnh `figure`** (2026-10-14, xong, chưa commit). Threat model trước khi code: TM-9 (đường
+- **Mốc 2, việc 3.1: lệnh `figure`** (2026-10-14, xong). Threat model trước khi code: TM-9 (đường
   dẫn đọc, ghi), TM-10 (RAM), TM-11 (PDF khác bài), TM-12 (prompt injection qua chữ trong ảnh). `paper_graph/figure.py`
   + `cli.py` (`figure BLOCKS ID… [--pdf] [--dpi]`, ảnh vào `<tên>.figures/`, in lời nhắc ảnh là dữ liệu); 9 test
   `tests/test_figure.py` (Python của VietPaper), 3 đột biến chốt chặn đều làm test đỏ; SKILL.md bước 2 và mục An
@@ -133,7 +133,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   `files.read_regular` dùng chung cho `extract`, `figure`, `check --pdf`. TM-9..TM-12 `đã có` kèm `file:dòng`.
   SKILL.md sửa theo góp ý bài mồi ảnh (`paper.title`, chữ gán cho bảng điều bảng không đo, hình bài không nhắc tới).
 
-- **Sửa toạ độ trang xoay khi extract** (2026-10-14, xong, chưa commit; việc reviewer của lệnh `figure` tìm ra,
+- **Sửa toạ độ trang xoay khi extract** (2026-10-14, xong; việc reviewer của lệnh `figure` tìm ra,
   bạn bảo làm ngay). Gốc lỗi: blocks.json trộn hai hệ toạ độ ở trang `/Rotate` (đoạn theo trang chưa xoay, vùng bố cục
   theo trang đã xoay), nên chữ trong vùng hình rỗng và chú thích không ghép được (đã tái hiện). Sửa: mọi `bbox` theo
   toạ độ nội dung (`extract._content`), vùng bố cục đổi về hệ đó trước khi đưa VietPaper ở nhánh có lớp chữ, nhánh OCR
@@ -170,14 +170,35 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   ngược trong danh sách hình chỉ tới ô thật sự hiện hình; một vùng ảnh hỏng chỉ mất ảnh đó, chân trang báo id;
   nhận "Figure 1a", "Tables 1 and 2", "Hình 1, 2 và 3"), có test; cả bộ test đạt (biên nhận).
 
+- **Mốc 3: sửa trên sơ đồ** (2026-10-15, xong, commit 2026-10-16). Bạn chốt 1B 2a 3 khác 4 tự do:
+  `python -m paper_graph serve bai.graph.json` (`paper_graph/serve.py`) phục vụ trình xem ở 127.0.0.1 có chế độ sửa:
+  sửa nhãn, thuật ngữ, giải thích (ô thành `accepted`, phải qua `check` và không thêm PG220 mới), khoá/mở khoá, kéo ô
+  (chuột, Alt + mũi tên), "Dàn lại tầng này". Toạ độ ở `bai.layout.json` (`paper_graph/edits.py`), `layout.py` dàn ô
+  chưa ghim quanh ô ghim; `view` tĩnh cũng dùng toạ độ đó. Threat model TM-16..TM-20 (CSRF, DNS rebinding, nội dung
+  sửa đổi, ghi đè bản mới hơn, toạ độ độc). Test `tests/test_serve.py` (14), 13 đột biến chốt chặn đều làm đỏ; cả bộ
+  test đạt hai Python (biên nhận). Thử trên bản sao RAG: kéo, Alt + mũi tên (5 lần gộp 1 request), sửa nhãn, số bịa
+  bị từ chối (PG220), khoá, dàn lại, xung đột 409, console sạch. `.claude/launch.json` có thêm cấu hình `serve-rag`,
+  vẫn không commit. Reviewer opus: TM-16..20 đứng vững; 2 vừa, 6 thấp, sửa cả 8 (khung nhóm né ô khác nhóm, server
+  nhiều luồng cộng khoá, lỗi lạ trả JSON, file layout hỏng không bị ghi đè, Alt + mũi tên chốt tầng, ô ghim chồng thì
+  dời, định dạng chung `format_graph` và lệnh `fmt` (skill chạy trước `check`), in cổng có flush); 6 đột biến bản sửa
+  đều làm đỏ; 27 test `test_serve.py`; cả bộ test đạt hai Python (biên nhận); thử lại trong trình duyệt.
+
 ### Việc tiếp theo
 
-1. Mốc 3: sửa nhãn, khoá ô, kéo thả; giữ toạ độ giữa các lần dựng lại.
+Bạn chốt 2026-10-16 (trang https://claude.ai/artifact/JbS5XBzaztdKAdDWLL2AMu): tích hợp đầy đủ vào VietPaper, VietPaper
+dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa VietPaper xong mới đụng repo đó; làm bước 5 (dựng sơ
+đồ qua API) sớm, trong paper-graph, bằng key OpenRouter của bạn (lưu ngoài repo).
+
+1. Bước 5 trong paper-graph: threat model (gọi dịch vụ ngoài, khoá API, output của model), lệnh dựng sơ đồ qua
+   OpenRouter với vòng dựng → `check` → sửa, trần lượt và trần tiền; đo trên bộ đo.
+2. Khi phiên kia commit xong VietPaper: bước 1 (nối thư viện, xuất `blocks.json` từ `state.json`), 2 (tab xem, cuộn
+   hai khung), 3 (bản dịch câu trích), 4 (sửa, khoá, kéo trong VietPaper), rồi nút "Dựng sơ đồ" gọi bước 5.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
-- **Q1 B.** Repo riêng gồm lõi (định dạng file, bộ kiểm, bước dựng) và trình xem;
-  VietPaper thêm tab "Sơ đồ" qua một lớp nối mỏng.
+- **Q1 B, đổi 2026-10-16.** Repo riêng gồm lõi (định dạng file, bộ kiểm, bước dựng) và trình xem. Ban đầu VietPaper
+  chỉ thêm lớp nối mỏng; nay VietPaper dùng paper-graph như thư viện (`pip install -e ../paper-graph`), có đủ tính
+  năng trong VietPaper (xem, sửa, dựng), paper-graph vẫn chạy độc lập.
 - **Q2 a.** Skill Claude Code dựng sơ đồ trước; bước gọi API trong app sau, khi đã
   có bộ đo.
 - **Q3 i.** Một sơ đồ nhiều tầng, mỗi tầng tối đa 9 ô, bấm để mở tầng dưới.
@@ -188,8 +209,8 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - File sơ đồ là JSON có schema: LLM sinh dễ, bộ kiểm đọc dễ, giao diện ghi lại được.
 - Bộ trích PDF không biết gì về sơ đồ: lõi nhận danh sách đoạn (id, trang, bbox,
   nhãn layout, chữ), không tự đọc PDF. Giống luật "bộ quét không biết luật" của archctl.
-- Layout: elkjs (EPL-2.0, nhóm lồng nhau, cạnh dài) đóng vào trình xem, kèm file
-  giấy phép; thử trên sơ đồ mẫu trước khi chốt, dagre (MIT, 49 KB) là dự phòng.
+- Layout: tự viết bằng Python (`paper_graph/layout.py`, dàn theo lớp) thay cho elkjs như dự định ban đầu: không
+  nhúng thư viện 1,5 MB giấy phép EPL, kiểm được bằng unittest, lưu toạ độ được (2026-10-14).
 
 ## §1 Các mốc
 
@@ -235,7 +256,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
 - [x] HTML tự chứa, chạy offline: tầng đầu, bấm mở tầng dưới, thẻ chi tiết có
   trích dẫn, ảnh cắt đúng đoạn (bản dịch chuyển sang Mốc 4: cần VietPaper).
 - [x] Hình và bảng của bài gắn vào ô liên quan.
-- [ ] Sửa nhãn, khoá ô, kéo thả; giữ toạ độ giữa các lần dựng lại.
+- [x] Sửa nhãn, khoá ô, kéo thả; giữ toạ độ giữa các lần dựng lại.
 
 ### Mốc 4: gắn vào VietPaper
 

@@ -191,6 +191,20 @@ từ PDF đó: file blocks sửa tay mà giữ nguyên `source.sha256` vẫn qua
 
 Bản trích lại khác cũng có thể chỉ vì VietPaper đã đổi cách gom đoạn; lệnh báo cả điều đó (`source.extractor`).
 
+## `layout.json`: toạ độ ô đã kéo
+
+`paper_graph serve` ghi `bai.layout.json` cạnh `bai.graph.json` khi người dùng kéo ô. Skill dựng lại sơ đồ không
+đụng file này; ô còn id cũ thì còn chỗ cũ, ô mới tự dàn quanh các ô đã ghim.
+
+```json
+{"version": 1, "sha256": "<SHA-256 của PDF, như paper.sha256>",
+ "tiers": {"": {"idea": [412, 160]}, "method": {"m.src": [28, 28]}}}
+```
+
+- Khoá của `tiers`: `""` là tầng đầu, id ô cha cho tầng dưới. Toạ độ là góc trên trái của ô, số trong 0–20000.
+- `sha256` lệch với sơ đồ thì bỏ cả file (toạ độ của bài khác). Ô không còn, tầng sai hay toạ độ hỏng thì bỏ mục đó;
+  `view` và `serve` báo số mục bị bỏ ở chân trang.
+
 ## Giới hạn đầu vào
 
 | | Trần | Ở đâu |
@@ -198,5 +212,7 @@ Bản trích lại khác cũng có thể chỉ vì VietPaper đã đổi cách g
 | PDF | 150 MB, 400 trang (`--max-pages`) | `extract`, kiểm trước khi xử lý trang nào |
 | JSON | 50 MB, lồng quá sâu bị từ chối | `check` |
 | `paper.blocks` | tên tương đối trong thư mục của sơ đồ, đuôi `.blocks.json`, không đi qua symlink ra ngoài | `check` |
+| `layout.json` | 1 MB, toạ độ 0–20000 | `view`, `serve` |
+| Request của `serve` | 64 KB, chỉ từ chính trang của server (token, Host, Origin) | `serve` |
 
 Lý do từng trần ở `.agent/threat-model.md`.

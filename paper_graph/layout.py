@@ -172,12 +172,14 @@ def _place(items: list[str], sizes: dict[str, tuple[float, float]], links: list[
     return at, full + 2 * margin, height
 
 
-def layout_tier(nodes: list[m.Node], edges: list[m.Edge], groups: list[m.Group]) -> dict:
+def layout_tier(nodes: list[m.Node], edges: list[m.Edge], groups: list[m.Group],
+                pins: dict[str, tuple[float, float]] | None = None) -> dict:
     """Bố cục một tầng. Mỗi nhóm được dàn riêng bên trong rồi thu thành một khối khi dàn cả tầng, nên khung nhóm chỉ
-    bao đúng thành viên của nó."""
+    bao đúng thành viên của nó. `pins`: ô người dùng đã kéo (góc trên trái); xem `_apply_pins`."""
     ids = [n.id for n in nodes]
     if not ids:
-        return {"nodes": {}, "order": [], "edges": [], "groups": [], "width": 2 * MARGIN, "height": 2 * MARGIN}
+        return {"nodes": {}, "order": [], "pinned": [], "shift": [0.0, 0.0], "edges": [], "groups": [], "width": 2 * MARGIN,
+                "height": 2 * MARGIN}
     index = {i: k for k, i in enumerate(ids)}
     by_id = {n.id: n for n in nodes}
     sizes = {i: node_size(by_id[i].label) for i in ids}
@@ -238,6 +240,13 @@ def layout_tier(nodes: list[m.Node], edges: list[m.Edge], groups: list[m.Group])
         else:
             order.append(item[2:])
 
+    pinned = sorted(i for i in (pins or {}) if i in boxes)
+    shift = [0.0, 0.0]
+    if pinned:
+        width, height, shift = _apply_pins(boxes, {i: pins[i] for i in pinned}, order, live_groups, group_of, out_groups,
+                                    head)
+        order = _reading_order(boxes, order, group_of)
+
     # 3. cạnh: hướng theo toạ độ thật
     out_edges = []
     for e in edges:
@@ -257,8 +266,100 @@ def layout_tier(nodes: list[m.Node], edges: list[m.Edge], groups: list[m.Group])
 
     return {"nodes": {i: {"x": round(boxes[i].x, 1), "y": round(boxes[i].y, 1), "w": boxes[i].w, "h": boxes[i].h,
                           "lines": boxes[i].lines} for i in order},
-            "order": order, "edges": out_edges, "groups": out_groups, "width": round(width, 1),
+            "order": order, "pinned": pinned, "shift": shift, "edges": out_edges, "groups": out_groups, "width": round(width, 1),
             "height": round(height, 1)}
+
+
+def _overlap(a: Box, b: Box, pad: float) -> bool:
+    return a.x < b.x + b.w + pad and b.x < a.x + a.w + pad and a.y < b.y + b.h + pad and b.y < a.y + a.h + pad
+
+
+def _apply_pins(boxes: dict[str, Box], pins: dict[str, tuple[float, float]], order: list[str], groups: list[m.Group],
+                group_of: dict[str, str], out_groups: list[dict], head: dict[str, list[str]]
+                ) -> tuple[float, float, list[float]]:
+    """Ô đã ghim nằm đúng chỗ người dùng kéo; ô ghim sau đè ô ghim trước (vd. nhãn vừa sửa dài ra) thì dời xuống. Ô
+    chưa ghim giữ chỗ tự dàn, đè lên ô khác hay lọt vào khung của nhóm không chứa nó thì dời sang phải tới chỗ trống;
+    khung nhóm tính lại theo thành viên, lặp tới khi yên. Cả tầng dịch cho khỏi toạ độ âm (khung nhóm có thể nhô lên
+    trên ô ghim). Trả bề ngang, bề cao mới, và độ dịch [dx, dy]: toạ độ ghim = toạ độ trên hình trừ độ dịch."""
+    pad = GAP_X / 2
+    placed: list[Box] = []
+    for i in order:
+        if i in pins:
+            b = boxes[i]
+            b.x, b.y = pins[i]
+            for _ in range(len(boxes) + 1):  # mỗi lần dời xuống dưới một ô ghim đang chặn: hữu hạn bước
+                hit = next((o for o in placed if _overlap(b, o, 0)), None)
+                if hit is None:
+                    break
+                b.y = hit.y + hit.h + pad
+            placed.append(b)
+    loose = [i for i in order if i not in pins]
+    frames: list[tuple] = []
+    for _ in range(2 * len(boxes) + 2):  # mỗi vòng chỉ dời sang phải: dừng khi không ô nào phải dời
+        frames = _frames(boxes, groups, group_of)
+        moved = False
+        done = list(placed)
+        for i in loose:
+            b = boxes[i]
+            for _ in range(4 * len(boxes) + 4):
+                hit = next((o for o in done if _overlap(b, o, pad)), None)
+                if hit is None:
+                    fr = next((f for f in frames if f[0].id != group_of.get(i) and
+                               _overlap(b, Box(f[2], f[3], f[4], f[5], []), pad)), None)
+                    if fr is None:
+                        break
+                    b.x = fr[2] + fr[4] + pad + 0.5
+                else:
+                    b.x = hit.x + hit.w + pad + 0.5
+                moved = True
+            done.append(b)
+        if not moved:
+            break
+    frames = _frames(boxes, groups, group_of)
+    out_groups.clear()
+    for g, lines, *_ in frames:
+        head[g.id] = lines
+    xs = [b.x for b in boxes.values()] + [f[2] for f in frames]
+    ys = [b.y for b in boxes.values()] + [f[3] for f in frames]
+    dx, dy = max(0.0, MARGIN - min(xs)), max(0.0, MARGIN - min(ys))
+    for b in boxes.values():
+        b.x += dx
+        b.y += dy
+    for g, lines, x, y, w, h in frames:
+        out_groups.append({"id": g.id, "label": g.label, "lines": lines, "x": round(x + dx, 1), "y": round(y + dy, 1),
+                           "w": round(w, 1), "h": round(h, 1)})
+    right = max([b.x + b.w for b in boxes.values()] + [gr["x"] + gr["w"] for gr in out_groups])
+    bottom = max([b.y + b.h for b in boxes.values()] + [gr["y"] + gr["h"] for gr in out_groups])
+    return right + MARGIN, bottom + MARGIN, [round(dx, 1), round(dy, 1)]
+
+
+def _frames(boxes: dict[str, Box], groups: list[m.Group], group_of: dict[str, str]) -> list[tuple]:
+    """Khung từng nhóm theo vị trí hiện tại của thành viên: (nhóm, dòng nhãn, x, y, w, h)."""
+    out = []
+    for g in groups:
+        members = [boxes[i] for i in boxes if group_of.get(i) == g.id]
+        x0 = min(b.x for b in members)
+        x1 = max(b.x + b.w for b in members)
+        lines = wrap(g.label, max(8, int(max(x1 - x0, NODE_W) / CHAR_W)))
+        top = min(b.y for b in members) - GROUP_PAD - _head_h(lines)
+        bottom = max(b.y + b.h for b in members) + GROUP_PAD
+        out.append((g, lines, x0 - GROUP_PAD, top, max(x1 - x0, NODE_W) + 2 * GROUP_PAD, bottom - top))
+    return out
+
+
+def _reading_order(boxes: dict[str, Box], order: list[str], group_of: dict[str, str]) -> list[str]:
+    """Thứ tự đọc theo vị trí sau khi ghim: theo hàng rồi trái sang phải, ô cùng nhóm vẫn liền nhau (đứng ở chỗ của
+    thành viên đầu tiên)."""
+    def key(i: str) -> tuple[float, float]:
+        return round(boxes[i].y + boxes[i].h / 2, 1), round(boxes[i].x, 1)
+    out: list[str] = []
+    for i in sorted(order, key=key):
+        g = group_of.get(i)
+        if g is None:
+            out.append(i)
+        elif i not in out:
+            out += sorted((x for x in order if group_of.get(x) == g), key=key)
+    return out
 
 
 def _head_h(lines: list[str]) -> float:
@@ -270,8 +371,9 @@ def _r(p: tuple[float, float]) -> list[float]:
     return [round(p[0], 1), round(p[1], 1)]
 
 
-def layout_graph(graph: m.Graph) -> dict[str, dict]:
-    """Bố cục mọi tầng: khoá "" cho tầng đầu, id ô cha cho tầng dưới của nó."""
+def layout_graph(graph: m.Graph, pins: dict[str, dict[str, tuple[float, float]]] | None = None) -> dict[str, dict]:
+    """Bố cục mọi tầng: khoá "" cho tầng đầu, id ô cha cho tầng dưới của nó. `pins[tầng][ô]` là toạ độ ô đã kéo
+    (`bai.layout.json`, đọc bằng `edits.read_pins`)."""
     tiers: dict[str | None, list[m.Node]] = {}
     for n in graph.nodes.values():
         tiers.setdefault(n.parent, []).append(n)
@@ -280,5 +382,6 @@ def layout_graph(graph: m.Graph) -> dict[str, dict]:
         ids = {n.id for n in members}
         es = [e for e in graph.edges if e.src in ids and e.dst in ids]
         gs = [g for g in graph.groups if g.parent == parent]
-        out["" if parent is None else parent] = layout_tier(members, es, gs)
+        key = "" if parent is None else parent
+        out[key] = layout_tier(members, es, gs, (pins or {}).get(key))
     return out

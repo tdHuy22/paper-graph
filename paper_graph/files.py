@@ -29,6 +29,11 @@ def read_json(path: Path, what: str, limit: int = MAX_JSON_BYTES):
         raise InputError(f"không đọc được {what} {path}: {e.strerror or e}") from None
     if len(data) > limit:  # file lớn lên giữa lúc stat và lúc đọc
         raise InputError(f"{what} {path} vượt trần {limit // (1024 * 1024)} MB")
+    return parse_json(data, what, path)
+
+
+def parse_json(data: bytes, what: str, path: Path):
+    """JSON từ bytes đã đọc (có trần), lỗi nào cũng thành InputError có thông báo đọc được."""
     try:
         return json.loads(data.decode("utf-8"))
     except UnicodeDecodeError as e:
@@ -58,6 +63,20 @@ def write_atomic(path: Path, data: bytes) -> None:
 
 def write_json(path: Path, doc) -> None:
     write_atomic(path, (json.dumps(doc, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+
+
+def format_graph(doc: dict) -> str:
+    """Định dạng chung của `graph.json` (lệnh `fmt`, `serve`, skill dựng sơ đồ): mỗi khoá gốc một dòng, riêng danh
+    sách (ô, cạnh, nhóm) thì mỗi phần tử một dòng. Sửa một ô thì diff git chỉ đổi đúng dòng của ô đó."""
+    def one(v) -> str:
+        return json.dumps(v, ensure_ascii=False)
+    parts = []
+    for k, v in doc.items():
+        if isinstance(v, list) and v:
+            parts.append(f" {one(k)}: [\n" + ",\n".join("  " + one(x) for x in v) + "\n ]")
+        else:
+            parts.append(f" {one(k)}: {one(v)}")
+    return "{\n" + ",\n".join(parts) + "\n}\n"
 
 
 def read_regular(path: Path, what: str, limit: int) -> bytes:

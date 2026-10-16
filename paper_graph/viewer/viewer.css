@@ -137,3 +137,23 @@ details { margin: 4px 0 0; } summary { cursor: pointer; font-size: 12.5px; color
 #zoom figcaption { margin-top: 10px; font-size: 14px; max-width: 80ch; }
 #zoom-close { margin-top: 12px; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0;
   border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+
+/* chế độ sửa */
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.msg { font-size: 13px; color: var(--ink-soft); }
+.msg.bad { color: var(--bad); }
+.node.locked .box { stroke: var(--ink); stroke-width: 2; }
+.node.pinned .box { stroke-dasharray: none; }
+.node.dragging { cursor: grabbing; opacity: .85; }
+.edit { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.edit .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.edit button { font: inherit; font-size: 14px; color: var(--accent); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+.edit button:hover { border-color: var(--accent); }
+.edit button[type="submit"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+.editform { display: grid; gap: 10px; }
+.fld { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+.fld input, .fld textarea { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; width: 100%; }
+.errs { margin: 0; padding-left: 18px; color: var(--bad); font-size: 13px; }
+.errs:empty { display: none; }

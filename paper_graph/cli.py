@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import blocks as blocks_mod
 from .check import check, parse_graph, render
-from .files import InputError, read_json, sha256_file, sibling, write_atomic, write_json
+from .files import InputError, format_graph, read_json, sha256_file, sibling, write_atomic, write_json
 from .text import safe
 
 
@@ -219,6 +219,41 @@ def cmd_view(a) -> int:
     return 0
 
 
+def cmd_serve(a) -> int:
+    from .edits import layout_path  # noqa: PLC0415
+    from .serve import App, make_server  # noqa: PLC0415
+
+    if not 0 <= a.port <= 65535:
+        raise InputError("--port phải trong khoảng 0–65535")
+    app = App(Path(a.graph), Path(a.blocks) if a.blocks else None, Path(a.pdf) if a.pdf else None,
+              images=not a.no_images, crops=not a.no_crops)
+    srv = make_server(app, a.port)
+    print(f"Mở http://127.0.0.1:{app.port}/ để xem và sửa {safe(a.graph, 300)} (Ctrl+C để dừng).")
+    print("Sửa chữ: ô thành `accepted` và phải qua `check`; toạ độ kéo thả lưu ở "
+          f"{safe(str(layout_path(Path(a.graph))), 300)}.")
+    if app.stats["note"]:
+        print(safe(app.stats["note"], 500))
+    sys.stdout.flush()  # stdout là pipe (chạy nền, launch.json) thì người dùng vẫn thấy cổng ngay
+    try:
+        srv.serve_forever()
+    finally:
+        srv.server_close()
+    return 0
+
+
+def cmd_fmt(a) -> int:
+    for name in a.graphs:
+        path = Path(name)
+        doc = read_json(path, "sơ đồ")
+        if not isinstance(doc, dict):
+            raise InputError(f"{path}: gốc phải là object")
+        text = format_graph(doc)
+        if path.read_text(encoding="utf-8") != text:
+            write_atomic(path, text.encode("utf-8"))
+            print(f"đã định dạng {safe(name, 300)}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="paper-graph", description="Sơ đồ nhiều tầng cho bài báo, mỗi ô neo về bài gốc")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -276,6 +311,19 @@ def main(argv=None) -> int:
     w.add_argument("--no-images", action="store_true", help="không nhúng ảnh nào")
     w.add_argument("--no-crops", action="store_true", help="không nhúng ảnh đoạn gốc của câu trích (file nhẹ hơn)")
     w.set_defaults(fn=cmd_view)
+
+    t = sub.add_parser("fmt", help="ghi lại graph.json theo định dạng chung: mỗi ô, cạnh, nhóm một dòng")
+    t.add_argument("graphs", nargs="+")
+    t.set_defaults(fn=cmd_fmt)
+
+    v = sub.add_parser("serve", help="trình xem có chế độ sửa (nhãn, khoá, kéo thả) trên máy chủ 127.0.0.1")
+    v.add_argument("graph")
+    v.add_argument("--port", type=int, default=8742, help="cổng (mặc định 8742; 0 là cổng trống bất kỳ)")
+    v.add_argument("--blocks", help="mặc định: paper.blocks trong sơ đồ")
+    v.add_argument("--pdf", help="PDF gốc để cắt ảnh (mặc định: source.file cạnh blocks.json)")
+    v.add_argument("--no-images", action="store_true", help="không nhúng ảnh nào")
+    v.add_argument("--no-crops", action="store_true", help="không nhúng ảnh đoạn gốc của câu trích")
+    v.set_defaults(fn=cmd_serve)
     c.set_defaults(fn=cmd_check)
 
     a = p.parse_args(argv)

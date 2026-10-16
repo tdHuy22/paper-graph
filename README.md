@@ -39,6 +39,8 @@ python3 -m paper_graph read bai.blocks.json --pages 1-5
 python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
 ../pdf-translator/.venv/bin/python -m paper_graph figure bai.blocks.json p8-f1   # cắt hình ra bai.figures/p8-f1.png
 ../pdf-translator/.venv/bin/python -m paper_graph view bai.graph.json            # trình xem bai.html, chạy offline
+../pdf-translator/.venv/bin/python -m paper_graph serve bai.graph.json           # trình xem có chế độ sửa, http://127.0.0.1:8742/
+python3 -m paper_graph fmt bai.graph.json                                       # định dạng chung: mỗi ô một dòng
 ```
 
 `view` ghi một file HTML tự chứa: tầng đầu, bấm ô để xem giải thích và câu trích nguyên văn (kèm ảnh đoạn gốc),
@@ -46,6 +48,12 @@ python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
 chú thích, ô nhắc "Bảng 2", hình của ô bằng chứng nối vào, hay hình ở tầng dưới. Bấm hình để phóng to; nút "Hình và
 bảng" liệt kê mọi hình của bài kèm các ô dùng nó. Chạy bằng `python3` thường cũng được, chỉ là không có ảnh (cắt ảnh
 cần PyMuPDF). Sơ đồ phải qua `check` 0 lỗi mới xuất được.
+
+`serve` mở cùng trình xem trên máy chủ cục bộ (chỉ 127.0.0.1) và cho sửa: sửa nhãn, thuật ngữ, giải thích trong thẻ
+(ô thành `accepted`; sửa đổi phải qua `check` và không được thêm số không có trong bài), khoá hay mở khoá ô, kéo ô tới
+chỗ khác (bàn phím: Alt + mũi tên), "Dàn lại tầng này". Nội dung ghi vào `bai.graph.json`; toạ độ ghi vào
+`bai.layout.json` cạnh đó, nên dựng lại sơ đồ không mất chỗ các ô đã kéo (ô còn id thì còn chỗ), và `view` cũng
+dùng toạ độ này. Sơ đồ trên đĩa đổi trong lúc trang đang mở (ví dụ vừa dựng lại) thì trang báo tải lại, không ghi đè.
 
 Dựng sơ đồ: trong repo này, nhờ Claude Code "dựng sơ đồ cho bài X". Skill
 [dung-so-do](.claude/skills/dung-so-do/SKILL.md) đọc bài bằng `read`, viết `bai.graph.json`, chạy `check` và sửa tới khi

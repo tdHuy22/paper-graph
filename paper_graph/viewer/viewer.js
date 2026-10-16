@@ -135,7 +135,9 @@
       var b = Object.prototype.hasOwnProperty.call(L.nodes, id) ? L.nodes[id] : null, n = node(id);
       if (!b || !n || shown.has(id)) return;
       var g = sv("g", { tabindex: 0, role: "button" });
-      g.setAttribute("class", "node k-" + kindOf(n) + (n.basis === "inference" ? " inference" : ""));
+      var pinned = Array.isArray(L.pinned) && L.pinned.indexOf(id) >= 0;
+      g.setAttribute("class", "node k-" + kindOf(n) + (n.basis === "inference" ? " inference" : "") +
+        (n.status === "locked" ? " locked" : "") + (pinned ? " pinned" : ""));
       g.setAttribute("aria-label", KINDS[kindOf(n)] + ": " + n.label + (n.children ? ". Có tầng dưới " + n.children + " ô" : ""));
       g.appendChild(sv("rect", { x: num(b.x) - 4, y: num(b.y) - 4, width: num(b.w) + 8, height: num(b.h) + 8, rx: 12,
         "class": "ring" }));
@@ -151,16 +153,21 @@
         badge.textContent = "▸ " + n.children;
         g.appendChild(badge);
       }
-      g.addEventListener("click", function () { select(id); });
+      g.addEventListener("click", function () { if (justDragged) { justDragged = false; return; } select(id); });
       g.addEventListener("dblclick", function () { if (n.children) open(id); });
       g.addEventListener("keydown", function (ev) {
         if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); if (selected === id && n.children) open(id); else select(id); }
+        var step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+        if (D.edit && ev.altKey && step) { ev.preventDefault(); nudge(id, g, b, step[0] * GRID, step[1] * GRID); }
       });
+      if (D.edit) draggable(g, id, b);
       svg.appendChild(g);
       shown.set(id, g);
     });
     mark();
     crumbs();
+    var rl = document.getElementById("relayout");
+    rl.hidden = !(D.edit && Array.isArray(L.pinned) && L.pinned.length);
     focusNode(keep);
   }
 
@@ -194,6 +201,7 @@
   // `focus`: đưa focus bàn phím vào ô được chọn (hay ô đầu tầng) sau khi điều hướng từ nút, đường dẫn, phím Escape
   function go(key, sel, focus) {
     if (!Object.prototype.hasOwnProperty.call(D.tiers, key)) return;
+    if (D.edit) flushNudge();  // đổi tầng giữa lúc Alt + mũi tên: lưu ngay cho tầng cũ
     tier = key;
     selected = sel;
     draw();
@@ -241,6 +249,168 @@
     if (f.caption) cap.appendChild(el("span", "fig-cap", f.caption));
     box.appendChild(cap);
     return box;
+  }
+
+  // ---------------------------------------------------------------- chế độ sửa (chỉ khi trang do `serve` phục vụ)
+  var GRID = 8;
+  var justDragged = false;
+
+  function say(text, bad) {
+    var m = document.getElementById("msg");
+    m.textContent = text;
+    m.className = "msg" + (bad ? " bad" : "");
+  }
+
+  // gửi sửa đổi; server trả sơ đồ mới (bố cục, ô, hình) thì vẽ lại, giữ tầng và ô đang chọn
+  function api(path, body, done) {
+    body.version = D.edit.version;
+    say("Đang lưu…", false);
+    return fetch(path, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-PG-Token": String(D.edit.token) },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    }).then(function (res) {
+      if (!res.ok) {
+        say(String(res.j.error || ("lỗi " + res.status)), true);
+        draw();  // ô đang kéo về chỗ cũ
+        if (done) done(res.j);
+        return;
+      }
+      var keep = focused(), inCard = document.getElementById("card").contains(document.activeElement);
+      D.tiers = res.j.tiers; D.nodes = res.j.nodes; D.figures = res.j.figures; D.edges = res.j.edges;
+      D.edit.version = res.j.version;
+      if (typeof res.j.note === "string" && res.j.note) document.getElementById("foot").textContent = res.j.note;
+      if (!Object.prototype.hasOwnProperty.call(D.tiers, tier)) tier = "";
+      if (selected !== null && !node(selected)) selected = null;
+      draw();
+      if (selected !== null) card(selected); else intro();
+      focusNode(keep !== null ? keep : (inCard ? selected : null));  // thẻ dựng lại: focus về ô vừa sửa
+      say("Đã lưu", false);
+      if (done) done(null);
+    }).catch(function () { say("Không gửi được: server đã dừng?", true); });
+  }
+
+  function editTools(c, id, n) {
+    var box = el("div", "edit"), row = el("div", "row");
+    if (n.status !== "locked") {
+      var eb = el("button", "", "Sửa chữ");
+      eb.type = "button";
+      eb.addEventListener("click", function () { editForm(c, box, id, n); });
+      row.appendChild(eb);
+    }
+    var lock = el("button", "", n.status === "locked" ? "Mở khoá" : "Khoá ô");
+    lock.type = "button";
+    lock.addEventListener("click", function () { api("/api/edit", { node: id, set: { status: n.status === "locked" ? "accepted" : "locked" } }); });
+    row.appendChild(lock);
+    box.appendChild(row);
+    if (n.status === "locked") box.appendChild(el("p", "muted", "Ô đã khoá: lần dựng lại sau giữ nguyên ô này. Mở khoá để sửa chữ."));
+    c.appendChild(box);
+  }
+
+  function field(form, label, name, value, max, area) {
+    var wrap = el("label", "fld");
+    wrap.htmlFor = "edit-" + name;
+    wrap.appendChild(el("span", "", label));
+    var inp = el(area ? "textarea" : "input", "");
+    inp.id = "edit-" + name;
+    inp.name = name;
+    inp.value = value || "";
+    inp.maxLength = max;
+    if (area) inp.rows = 5;
+    wrap.appendChild(inp);
+    form.appendChild(wrap);
+    return inp;
+  }
+
+  function editForm(c, box, id, n) {
+    while (box.firstChild) box.removeChild(box.firstChild);
+    var form = el("form", "editform");
+    var lab = field(form, "Nhãn", "label", n.label, 120, false);
+    var term = field(form, "Thuật ngữ", "term", n.term, 160, false);
+    var exp = field(form, "Giải thích", "explain", n.explain, 1500, true);
+    var errs = el("ul", "errs");
+    form.appendChild(errs);
+    var row = el("div", "row"), save = el("button", "", "Lưu"), cancel = el("button", "", "Huỷ");
+    save.type = "submit";
+    cancel.type = "button";
+    row.appendChild(save);
+    row.appendChild(cancel);
+    form.appendChild(row);
+    form.appendChild(el("p", "muted", "Lưu xong ô thành «đã duyệt». Sơ đồ phải qua kiểm tra: số liệu trong nhãn phải có trong câu trích."));
+    cancel.addEventListener("click", function () { card(id); focusNode(id); });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      while (errs.firstChild) errs.removeChild(errs.firstChild);
+      if (!lab.value.trim()) { errs.appendChild(el("li", "", "Nhãn không được trống.")); lab.focus(); return; }
+      save.disabled = true;
+      api("/api/edit", { node: id, set: { label: lab.value, term: term.value, explain: exp.value } }, function (err) {
+        save.disabled = false;
+        if (err) (err.diags || []).forEach(function (d) { errs.appendChild(el("li", "", d)); });
+      });
+    });
+    box.appendChild(form);
+    lab.focus();
+  }
+
+  // toạ độ gửi lên là toạ độ ghim: toạ độ trên hình trừ độ dịch của tầng lúc bắt đầu kéo, bám lưới, không âm
+  function shiftOf(key) {
+    var sh = D.tiers[key] && Array.isArray(D.tiers[key].shift) ? D.tiers[key].shift : [0, 0];
+    return [num(sh[0]), num(sh[1])];
+  }
+  function sendPin(key, sh, id, b, dx, dy) {
+    function snap(v) { return Math.max(0, Math.round(v / GRID) * GRID); }
+    var pos = {};
+    pos[id] = [snap(num(b.x) + dx - sh[0]), snap(num(b.y) + dy - sh[1])];
+    api("/api/move", { tier: key, pos: pos });
+  }
+
+  function draggable(g, id, b) {
+    var start = null;
+    g.addEventListener("pointerdown", function (ev) {
+      if (ev.button !== 0) return;
+      var svg = document.getElementById("svg");
+      start = { x: ev.clientX, y: ev.clientY, k: num(D.tiers[tier].width) / (svg.clientWidth || 1), moved: false };
+      g.setPointerCapture(ev.pointerId);
+    });
+    g.addEventListener("pointermove", function (ev) {
+      if (!start) return;
+      var dx = (ev.clientX - start.x) * start.k, dy = (ev.clientY - start.y) * start.k;
+      if (!start.moved && Math.abs(dx) + Math.abs(dy) < 6) return;
+      start.moved = true;
+      start.dx = dx; start.dy = dy;
+      g.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+      g.classList.add("dragging");
+    });
+    function end() {
+      if (start && start.moved) {
+        justDragged = true;  // click ngay sau pointerup (cùng một lượt) không tính là chọn ô
+        setTimeout(function () { justDragged = false; }, 0);
+        sendPin(tier, shiftOf(tier), id, b, start.dx, start.dy);
+      }
+      start = null;
+    }
+    g.addEventListener("pointerup", end);
+    g.addEventListener("pointercancel", function () { start = null; g.removeAttribute("transform"); });
+  }
+
+  // Alt + mũi tên: gom các bước bấm liền nhau thành một lần lưu; tầng và độ dịch chốt từ bước đầu
+  var nudging = null;
+  function flushNudge() {
+    if (!nudging) return;
+    var cur = nudging;
+    nudging = null;
+    clearTimeout(cur.timer);
+    sendPin(cur.tier, cur.shift, cur.id, cur.b, cur.dx, cur.dy);
+  }
+  function nudge(id, g, b, dx, dy) {
+    if (nudging && nudging.id !== id) flushNudge();
+    if (!nudging) nudging = { id: id, tier: tier, shift: shiftOf(tier), b: b, dx: 0, dy: 0 };
+    nudging.dx += dx; nudging.dy += dy;
+    g.setAttribute("transform", "translate(" + nudging.dx + "," + nudging.dy + ")");
+    clearTimeout(nudging.timer);
+    nudging.timer = setTimeout(flushNudge, 450);
   }
 
   function zoom(id, from) {
@@ -309,6 +479,7 @@
       b.addEventListener("click", function () { open(id); });
       c.appendChild(b);
     }
+    if (D.edit) editTools(c, id, n);
     var rf = (n.figures || []).filter(function (r) { return fig(r.id); });
     if (rf.length) {
       c.appendChild(el("h3", "", "Hình, bảng liên quan"));
@@ -366,6 +537,10 @@
     figsBtn.hidden = false;
     figsBtn.addEventListener("click", gallery);
   }
+  document.getElementById("relayout").addEventListener("click", function () {
+    if (D.edit) api("/api/move", { tier: tier, reset: true });
+  });
+  if (D.edit) say("Chế độ sửa: kéo ô để đặt chỗ (Alt + mũi tên bằng bàn phím), sửa chữ và khoá ô trong thẻ.", false);
   var zoomBox = document.getElementById("zoom");
   document.getElementById("zoom-close").addEventListener("click", function () { zoomBox.close(); });
   zoomBox.addEventListener("click", function (ev) { if (ev.target === zoomBox) zoomBox.close(); });  // bấm nền tối

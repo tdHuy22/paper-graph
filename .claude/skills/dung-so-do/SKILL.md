@@ -63,7 +63,8 @@ bằng `-`). Ba file của một bài nằm chung một thư mục: PDF, `<tên>
 - Đã có `<tên>.graph.json` (dựng lại hay sửa): **luôn** chép nó sang `<tên>.graph.old.json` trước khi đổi gì, kể cả
   khi file đã có trong git (người dùng có thể vừa khoá ô mà chưa commit). Ô `status: locked` là ô người dùng đã khoá:
   giữ nguyên từng chữ, cả cạnh giữa hai ô locked và nhóm chứa ô locked. Ô `accepted` chỉ đổi khi có lý do, và nêu lý
-  do trong báo cáo.
+  do trong báo cáo. Giữ nguyên id của ô còn ý cũ: `<tên>.layout.json` (toạ độ người dùng đã kéo) gắn theo id; không
+  sửa, không xoá file đó.
 
 ### 2. Đọc hết bài
 
@@ -239,6 +240,7 @@ với chữ bài của các thành viên và ô cha):
 ### 5. Kiểm và sửa tới khi đạt
 
 ```bash
+python3 -m paper_graph fmt papers/<tên>/<tên>.graph.json              # định dạng chung: mỗi ô một dòng, như `serve` ghi
 python3 -m paper_graph check papers/<tên>/<tên>.graph.json            # hay thư mục bài người dùng chỉ
 python3 -m paper_graph check papers/<tên>/<tên>.graph.json --base papers/<tên>/<tên>.graph.old.json   # dựng lại, sửa
 ```
