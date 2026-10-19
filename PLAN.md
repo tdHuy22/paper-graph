@@ -237,8 +237,8 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    bài (BERT 8/10, RoFormer 13/14, RAG 12/14; DataSentinel 10/13 trượt), quan hệ 50–80%, soi yếu (0–1). Việc 5.3 tick.
    Lệnh `build` chưa commit (chờ bạn). VietPaper: phiên kia vẫn còn sửa chưa commit (`app.py`, `agent.py`), tiếp tục chờ.
 1. Lệnh `build` và Mốc 5 đã commit `0992182` (2026-10-19, bạn bảo "làm tiếp"; 221 test đạt, biên nhận;
-   `.claude/launch.json` vẫn không commit). Còn tuỳ chọn: đo DeepSeek thêm BERT, DataSentinel (khoảng 0,3 USD) để đủ
-   4 bài. Nên đổi khoá OpenRouter (khoá đã nằm trong lịch sử hội thoại; @ban).
+   `.claude/launch.json` vẫn không commit). Không đo thêm model trả phí (bạn chốt
+   2026-10-19). Nên đổi khoá OpenRouter (khoá đã nằm trong lịch sử hội thoại; @ban).
 2. Khi phiên kia commit xong VietPaper: bước 1 (nối thư viện, xuất `blocks.json` từ `state.json`), 2 (tab xem, cuộn
    hai khung), 3 (bản dịch câu trích), 4 (sửa, khoá, kéo trong VietPaper), rồi nút "Dựng sơ đồ" gọi bước 5.
    Kiểm 2026-10-19: `../pdf-translator` vẫn còn sửa chưa commit (`agent.py`, `scripts/smoke_features.py`,
@@ -262,13 +262,20 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 5. **Opus 5.5 qua `build` (2026-10-19, bạn bảo chạy RAG, `--max-usd 1.5 --rounds 2`): lượt 1 hỏng, mất 0,902 USD.**
    Câu trả lời bị cắt (`length`), không ghi file nào; tiền thật vượt "ước tối đa" 0,796. Đo bằng lời gọi nhỏ (tổng
    khoảng 0,04 USD): Opus 5.5 trên OpenRouter bắt buộc suy luận và token suy luận ăn vào `max_tokens`; chữ tiếng Việt 1,74
-   ký tự/token (code giả định 3). Sửa `build.py` (chưa commit): ngân sách suy luận riêng 8.000 token (chỉ gửi khi model
+   ký tự/token (code giả định 3). Sửa `build.py` (commit `be3beaa`): ngân sách suy luận riêng 8.000 token (chỉ gửi khi model
    nhận `reasoning`, không vượt `max_completion_tokens`), ước theo 1,5 ký tự/token rồi hiệu chỉnh theo token thật, giá
    ghi cache, thiếu `usage.cost` thì cộng mức ước trên, câu trả lời không đọc được ghi `bai.graph.raw.txt`, lỗi API ở
    lượt sau không làm mất câu trả lời đã trả tiền. Reviewer sonnet: 3 vừa, 4 thấp, sửa cả 7; 7 test mới, 9 đột biến đều
-   đỏ; cả bộ test đạt (biên nhận). TM-22 cập nhật, threat model TM-21..25 giờ tham chiếu theo tên hàm. Khoá đã dùng
-   khoảng 1,73/3 USD. Chạy lại Opus trên RAG: ước tối đa khoảng 1,19 USD cho lượt đầu nên với trần 1,5 chỉ được 1
-   lượt; chờ bạn quyết (@usd).
+   đỏ; cả bộ test đạt (biên nhận). TM-22 cập nhật, threat model TM-21..25 giờ tham chiếu theo tên hàm. Đã commit
+   `be3beaa`. **Chạy lại** (bạn bảo, `--max-usd 1.25`): lại hỏng, 1,062 USD (ước tối đa 1,190 nên trần tiền giữ đúng),
+   nhưng Opus dùng 27.705 token suy luận dù gửi `reasoning.max_tokens: 8000`: **Opus 5.5 trên OpenRouter không tuân
+   ngân sách suy luận** (lời gọi thử trước chỉ chứng minh tham số được nhận, không chứng minh được tuân). Câu trả lời
+   dở được giữ ở `.tmp/build/opus55/rag/rag.graph.raw.txt`; cứu được 38 ô (`rag.partial.graph.json`, không cạnh):
+   0 lỗi, 72/72 neo có thật, 0 PG220, phủ 14/14, đúng tầng 93%, soi 1/4 (quan hệ 40% vì mất hết cạnh). So trên RAG:
+   Haiku 5.5 13 ô phủ 9/14 (0,014 USD); Nemotron free 22 ô 12/14 (0 USD); DeepSeek V4 Pro 33 ô 14/14 soi 1/4 (0,178
+   USD); Opus 5.5 38 ô dở 14/14 soi 1/4 (1,96 USD hai lần, không ra sơ đồ); skill trong Claude Code 50 ô 14/14 soi 4/4.
+   Khoá còn 0,20 USD/3. Bạn chốt: không dùng model trả phí trên OpenRouter nữa, chỉ dùng Opus trong Claude Code (mục
+   "Quyết định đã chốt").
 6. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban): đủ đồ cho cả hai bài (sơ đồ đã khoá, 12
    câu mỗi bài).
 
@@ -281,6 +288,10 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
   có bộ đo.
 - **Q3 i.** Một sơ đồ nhiều tầng, mỗi tầng tối đa 9 ô, bấm để mở tầng dưới.
 - **Q4 x.** Mốc đầu: xem, mở nguồn, sửa, khoá; chế độ "đoán trước rồi mở" ở mốc 5.
+
+- **Không dùng model trả phí trên OpenRouter** (bạn chốt 2026-10-19, sau hai lượt Opus 5.5 hỏng, mất 1,96 USD). Dựng
+  sơ đồ bằng skill dung-so-do với Opus trong Claude Code; `build` qua OpenRouter chỉ còn dùng model `:free` (mặc định
+  Nemotron free). Không đo thêm DeepSeek, không sửa `build` cho model trả phí.
 
 ### Quyết định kỹ thuật tự chốt (đổi được nếu bạn muốn)
 
