@@ -259,7 +259,17 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    ở q1, q5), RAG q10 có chủ ngữ, RAG q11 thêm phương án nhiễu về giám sát, nhiễu dè dặt ở hai câu q12, rút đáp án dài.
    Đáp án là phương án dài nhất: Attention 2/12, RAG 3/12. `quiz` 0 lỗi cả hai bài, 221 test đạt (biên nhận); trang
    `papers/rag/rag.quiz.html` xuất lại. `docs/do-hieu-bai.md` ghi nguồn gốc và khác biệt của hai nhóm câu.
-5. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban): đủ đồ cho cả hai bài (sơ đồ đã khoá, 12
+5. **Opus 5.5 qua `build` (2026-10-19, bạn bảo chạy RAG, `--max-usd 1.5 --rounds 2`): lượt 1 hỏng, mất 0,902 USD.**
+   Câu trả lời bị cắt (`length`), không ghi file nào; tiền thật vượt "ước tối đa" 0,796. Đo bằng lời gọi nhỏ (tổng
+   khoảng 0,04 USD): Opus 5.5 trên OpenRouter bắt buộc suy luận và token suy luận ăn vào `max_tokens`; chữ tiếng Việt 1,74
+   ký tự/token (code giả định 3). Sửa `build.py` (chưa commit): ngân sách suy luận riêng 8.000 token (chỉ gửi khi model
+   nhận `reasoning`, không vượt `max_completion_tokens`), ước theo 1,5 ký tự/token rồi hiệu chỉnh theo token thật, giá
+   ghi cache, thiếu `usage.cost` thì cộng mức ước trên, câu trả lời không đọc được ghi `bai.graph.raw.txt`, lỗi API ở
+   lượt sau không làm mất câu trả lời đã trả tiền. Reviewer sonnet: 3 vừa, 4 thấp, sửa cả 7; 7 test mới, 9 đột biến đều
+   đỏ; cả bộ test đạt (biên nhận). TM-22 cập nhật, threat model TM-21..25 giờ tham chiếu theo tên hàm. Khoá đã dùng
+   khoảng 1,73/3 USD. Chạy lại Opus trên RAG: ước tối đa khoảng 1,19 USD cho lượt đầu nên với trần 1,5 chỉ được 1
+   lượt; chờ bạn quyết (@usd).
+6. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban): đủ đồ cho cả hai bài (sơ đồ đã khoá, 12
    câu mỗi bài).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)

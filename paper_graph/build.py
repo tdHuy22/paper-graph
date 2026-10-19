@@ -30,6 +30,13 @@ KEY_ENV = "OPENROUTER_API_KEY"
 KEY_FILE = Path.home() / ".config" / "paper-graph" / "openrouter.key"
 MAX_PAPER_CHARS = 400_000  # khoảng 100 nghìn token: bài dài hơn thì từ chối thay vì trả tiền lớn
 MAX_OUT_TOKENS = 32_000
+# Model suy luận (Opus 5.5 trên OpenRouter bắt buộc suy luận) tính token suy luận vào `max_tokens`: không giới hạn thì
+# suy luận ăn hết chỗ của JSON (2026-10-19: Opus 5.5 bị cắt ở lượt 1, mất 0,90 USD). Ngân sách riêng cho suy luận,
+# `max_tokens` của request = JSON + suy luận, và ước tiền tính cả hai.
+REASONING_TOKENS = 8_000
+# Ký tự mỗi token để ước tiền trước lượt đầu: đo trên Opus 5.5, chỉ dẫn tiếng Việt 1,74, chữ bài tiếng Anh 2,9; lấy
+# 1,5 để ước là mức trên. Sau mỗi lượt dùng tỉ lệ thật từ `usage.prompt_tokens` (TM-22).
+CHARS_PER_TOKEN = 1.5
 MAX_REPLY_BYTES = 8 * 1024 * 1024
 RETRIES = 2
 ROOT = Path(__file__).resolve().parents[1]
@@ -182,29 +189,49 @@ class Result:
     rounds: int = 0
     cost: float = 0.0
     log: list[str] = field(default_factory=list)
+    raw: str = ""  # câu trả lời cuối không đọc được thành JSON: đã trả tiền nên ghi ra file, không bỏ
 
     @property
     def ok(self) -> bool:
         return self.graph is not None and self.errors == 0 and self.pg220 == 0
 
 
-def price(model: str, post_get: Callable[[str], dict] | None = None) -> tuple[float, float]:
-    """Giá USD mỗi token (vào, ra) của model, từ danh sách công khai của OpenRouter. Giá âm (bộ định tuyến báo -1) hay
-    bằng 0 với model không phải `:free` thì từ chối: trần tiền tính từ giá này (TM-22)."""
+@dataclass
+class ModelInfo:
+    p_in: float  # USD mỗi token vào, đã lấy mức cao hơn giữa giá thường và giá ghi cache (chữ bài gửi kèm cache)
+    p_out: float
+    max_out: int | None = None  # `top_provider.max_completion_tokens`; None khi OpenRouter không báo
+    reasoning: bool = True  # model nhận tham số `reasoning`
+
+
+def model_info(model: str, post_get: Callable[[str], dict] | None = None) -> ModelInfo:
+    """Giá và giới hạn của model, từ danh sách công khai của OpenRouter. Giá âm (bộ định tuyến báo -1) hay bằng 0 với
+    model không phải `:free` thì từ chối: trần tiền tính từ giá này (TM-22)."""
     get = post_get or _get
     for m in get(API + "/models").get("data", []):
         if m.get("id") == model:
             p = m.get("pricing", {})
             try:
                 p_in, p_out = float(p.get("prompt") or 0), float(p.get("completion") or 0)
+                p_write = float(p.get("input_cache_write") or 0)
             except (TypeError, ValueError):
                 raise BuildError(f"giá của {model} không đọc được") from None
-            if p_in < 0 or p_out < 0 or not (p_in == p_in and p_out == p_out):
+            if min(p_in, p_out, p_write) < 0 or not (p_in == p_in and p_out == p_out and p_write == p_write):
                 raise BuildError(f"{model} không có giá cố định (bộ định tuyến?): chọn một model cụ thể")
             if (p_in == 0 or p_out == 0) and not model.endswith(":free"):
                 raise BuildError(f"{model} báo giá 0 mà không phải model :free: không ước được tiền")
-            return p_in, p_out
+            top = m.get("top_provider") if isinstance(m.get("top_provider"), dict) else {}
+            cap = top.get("max_completion_tokens")
+            cap = cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else None
+            params = m.get("supported_parameters")
+            return ModelInfo(max(p_in, p_write), p_out, cap, isinstance(params, list) and "reasoning" in params)
     raise BuildError(f"OpenRouter không có model {model}")
+
+
+def price(model: str, post_get: Callable[[str], dict] | None = None) -> tuple[float, float]:
+    """Giá USD mỗi token (vào, ra) của model: xem `model_info`."""
+    info = model_info(model, post_get)
+    return info.p_in, info.p_out
 
 
 def _get(url: str) -> dict:
@@ -258,6 +285,17 @@ def _force(raw: dict, title: str, sha: str, blocks_name: str, base: dict | None 
             "edges": edges, "groups": groups}
 
 
+def _usage(reply: dict) -> tuple[int | None, int | None]:
+    """(token vào, token suy luận) mà OpenRouter báo, hay None khi thiếu hay không phải số nguyên dương."""
+    usage = reply.get("usage") if isinstance(reply.get("usage"), dict) else {}
+    details = usage.get("completion_tokens_details")
+    details = details if isinstance(details, dict) else {}
+
+    def num(v):
+        return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+    return num(usage.get("prompt_tokens")), num(details.get("reasoning_tokens"))
+
+
 def _parse_reply(reply: dict) -> tuple[str, float | None, str]:
     try:
         choice = reply["choices"][0]
@@ -300,7 +338,7 @@ def _terms() -> str:
 
 
 def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, key: str | None = None,
-        post: Post | None = None, prices: tuple[float, float] | None = None, base: dict | None = None,
+        post: Post | None = None, prices: tuple[float, float] | ModelInfo | None = None, base: dict | None = None,
         say: Callable[[str], None] = print, allow_training: bool = False) -> Result:
     """Dựng sơ đồ cho blocks_path bằng `model`. `rounds` là số lượt sửa sau lượt đầu. Không ghi file.
 
@@ -315,7 +353,8 @@ def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, ke
     title, text = paper_text(bl, doc, blocks_path.name)
     key = key if key is not None else load_key()
     post = post or http_post
-    p_in, p_out = prices if prices is not None else price(model)
+    info = prices if isinstance(prices, ModelInfo) else ModelInfo(*prices) if prices is not None else model_info(model)
+    p_in, p_out = info.p_in, info.p_out
     base_graph = parse_graph(base)[0] if base is not None else None
     locked, _, _ = _locked(base)
 
@@ -328,21 +367,34 @@ def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, ke
                      "giữ nguyên (cả cạnh giữa chúng): giữ đúng id của chúng khi nối cạnh, không viết lại chúng.\n"
                      + "\n".join(json.dumps(n, ensure_ascii=False) for n in locked.values())})
     res = Result()
+    cpt = CHARS_PER_TOKEN  # ký tự mỗi token để ước; hiệu chỉnh theo token thật sau mỗi lượt
+    # Model suy luận: thêm ngân sách suy luận; không vượt mức tối đa model cho (vượt thì nhà cung cấp có thể từ chối).
+    out_tokens = MAX_OUT_TOKENS + (REASONING_TOKENS if info.reasoning else 0)
+    if info.max_out is not None:
+        out_tokens = min(out_tokens, info.max_out)
+    head_chars = None
     best: tuple | None = None  # (lỗi, PG220, sơ đồ, báo cáo, câu trả lời, phản hồi)
     for i in range(rounds + 1):
         messages = head + ([{"role": "assistant", "content": best[4]}, {"role": "user", "content": best[5]}]
                            if best is not None else [])
         sent = sum(len(m["content"]) if isinstance(m["content"], str) else len(m["content"][0]["text"])
                    for m in messages)
-        estimate = sent / 3.0 * p_in + MAX_OUT_TOKENS * p_out
+        if head_chars is None:
+            head_chars = sent
+        # Tỉ lệ đo được là của chỉ dẫn + bài; phần thêm ở lượt sửa (JSON tiếng Việt của model, báo cáo lỗi) dày token
+        # hơn, nên ước bằng tỉ lệ thấp hơn trong hai mức.
+        extra = max(sent - head_chars, 0)
+        estimate = ((sent - extra) / cpt + extra / min(cpt, CHARS_PER_TOKEN)) * p_in + out_tokens * p_out
         if res.cost + estimate > max_usd:
             res.log.append(f"dừng trước lượt {i + 1}: ước {estimate:.3f} USD, đã tiêu {res.cost:.3f}, trần {max_usd}")
             say(res.log[-1])
             break
         say(f"lượt {i + 1}: gửi {sent} ký tự tới {model} (ước tối đa {estimate:.3f} USD)")
-        body = {"model": model, "messages": messages, "max_tokens": MAX_OUT_TOKENS, "temperature": 0.2,
+        body = {"model": model, "messages": messages, "max_tokens": out_tokens, "temperature": 0.2,
                 "response_format": {"type": "json_object"}, "usage": {"include": True},
                 "provider": {"data_collection": "allow" if allow_training else "deny"}}
+        if info.reasoning:
+            body["reasoning"] = {"max_tokens": REASONING_TOKENS}
         reply, failed = None, None
         for attempt in range(RETRIES + 1):
             try:
@@ -360,21 +412,26 @@ def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, ke
                     break
                 time.sleep(2 ** attempt * 3)
         if reply is None:
-            if best is None:
+            if res.rounds == 0:  # chưa lượt nào được trả lời: chưa có gì để giữ
                 raise failed or BuildError("không gọi được OpenRouter")
             res.log.append(f"lượt {i + 1}: {failed}; dừng, giữ bản tốt nhất")
             say(res.log[-1])
             break
         content, cost, finish = _parse_reply(reply)
-        res.cost += cost if cost is not None else (sent / 3.0 * p_in + len(content) / 3.0 * p_out)
+        res.cost += cost if cost is not None else estimate  # không có tiền thật thì tính mức ước trên
         res.rounds = i + 1
+        prompt_tokens, reasoning_tokens = _usage(reply)
+        if prompt_tokens:  # không tin tỉ lệ cao hơn 4 ký tự mỗi token: ước thấp thì trần tiền vô hiệu
+            cpt = min(sent / prompt_tokens, 4.0) * 0.9
         raw = _json_of(content)
         if raw is None:
             n_err, n220, graph_doc = None, 0, None
+            res.raw = content
             note = ("Câu trả lời bị cắt vì quá dài: viết `explain` gọn hơn (1–2 câu), giữ đủ ô, trả lại TOÀN BỘ JSON."
                     if finish == "length" else "Câu trả lời không phải một object JSON. Trả lại đúng một object JSON.")
-            res.log.append(f"lượt {i + 1}: không đọc được JSON ({finish or 'không rõ lý do'}), tiền tới giờ "
-                           f"{res.cost:.3f} USD")
+            res.log.append(f"lượt {i + 1}: không đọc được JSON ({finish or 'không rõ lý do'}"
+                           + (f", {reasoning_tokens} token suy luận" if reasoning_tokens else "")
+                           + f"), tiền tới giờ {res.cost:.3f} USD")
         else:
             graph_doc = _force(raw, title, bl.sha256, blocks_path.name, base)
             graph, diags = parse_graph(graph_doc)
@@ -405,6 +462,11 @@ def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, ke
     return res
 
 
+def raw_path(blocks_path: Path) -> Path:
+    """Câu trả lời không đọc được thành sơ đồ: tên riêng, không đè báo cáo của bản nháp."""
+    return blocks_path.with_name(blocks_path.name.removesuffix(".blocks.json") + ".graph.raw.txt")
+
+
 def output_paths(blocks_path: Path) -> tuple[Path, Path]:
     stem = blocks_path.name.removesuffix(".blocks.json")
     return blocks_path.with_name(stem + ".graph.json"), blocks_path.with_name(stem + ".graph.draft.json")
@@ -431,6 +493,9 @@ def build(blocks_path: Path, model: str, rounds: int, max_usd: float, force: boo
         base = read_json(out, "sơ đồ cũ")
     res = run(blocks_path, model, rounds, max_usd, base=base, say=say, **kw)
     if res.graph is None:
+        if res.raw:  # đã trả tiền mà không ra sơ đồ: giữ câu trả lời để đọc hay ghép tay (dữ liệu, không chạy gì)
+            write_atomic(raw_path(blocks_path), ("\n".join(res.log) + "\n\n--- câu trả lời cuối của model ---\n"
+                                                     + res.raw + "\n").encode("utf-8"))
         return res, draft
     if res.ok:
         if _snapshot(out) != before:

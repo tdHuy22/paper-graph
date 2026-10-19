@@ -171,6 +171,92 @@ class Build(unittest.TestCase):
         res, _ = self.go(cut)
         self.assertTrue(res.ok)
 
+    def test_reasoning_has_its_own_budget(self):  # TM-22: suy luận ăn hết max_tokens làm JSON bị cắt (Opus 5.5)
+        fake = Fake(graph())
+        self.go(fake)
+        body = fake.bodies[0]
+        self.assertEqual(body["reasoning"], {"max_tokens": build.REASONING_TOKENS})
+        self.assertEqual(body["max_tokens"], build.MAX_OUT_TOKENS + build.REASONING_TOKENS)
+
+    def test_estimate_follows_measured_tokens(self):  # TM-22: ước theo ký tự/3 thấp hơn tiền thật với chữ tiếng Việt
+        said = []
+        bad = graph()
+        node(bad, "idea")["label"] = "Nhanh hơn 99 lần"
+
+        def tokens(url, body, key):
+            tokens.sent.append(sum(len(m["content"]) if isinstance(m["content"], str) else len(m["content"][0]["text"])
+                                   for m in body["messages"]))
+            r = reply(json.dumps(bad, ensure_ascii=False))
+            r["usage"]["prompt_tokens"] = tokens.sent[-1]  # 1 ký tự mỗi token: nặng hơn mức ước ban đầu
+            return r
+        tokens.sent = []
+        p_in, p_out = 1e-6, 1e-6
+        build.run(self.bp, "m", 1, 5, key=KEY, post=tokens, prices=(p_in, p_out), say=said.append)
+        est = [float(x.split("ước tối đa ")[1].split(" USD")[0]) for x in said if "ước tối đa" in x]
+        out = (build.MAX_OUT_TOKENS + build.REASONING_TOKENS) * p_out
+        self.assertAlmostEqual(est[0], tokens.sent[0] / build.CHARS_PER_TOKEN * p_in + out, delta=0.001)
+        self.assertAlmostEqual(est[1], tokens.sent[1] / 0.9 * p_in + out, delta=0.001)  # tỉ lệ thật, trừ hao 10%
+
+    def test_unreadable_paid_reply_is_kept(self):  # đã trả tiền mà không ra JSON: ghi lại, không bỏ
+        res, path = self.go(Fake('{"nodes": [{"id": "x"', '{"nodes": ['), rounds=1)
+        self.assertIsNone(res.graph)
+        self.assertFalse((self.d / "toy.graph.json").exists())
+        self.assertFalse((self.d / "toy.graph.draft.json").exists())
+        txt = (self.d / "toy.graph.raw.txt").read_text(encoding="utf-8")
+        self.assertIn('{"nodes": [', txt)
+        self.assertIn("không đọc được JSON", txt)
+
+    def test_api_error_after_an_unreadable_reply_keeps_it(self):  # review: lượt 2 lỗi API làm mất câu trả lời lượt 1
+        res, _ = self.go(Fake('{"nodes": [{"id": "x"', build.BuildError("OpenRouter trả 400: hỏng")), rounds=2)
+        self.assertEqual(res.rounds, 1)
+        self.assertGreater(res.cost, 0)
+        self.assertIn('{"nodes": [{"id": "x"', (self.d / "toy.graph.raw.txt").read_text(encoding="utf-8"))
+        with self.assertRaises(build.BuildError):  # lượt đầu lỗi thì chưa trả tiền gì: vẫn báo lỗi
+            self.go(Fake(build.BuildError("OpenRouter trả 400: hỏng")))
+
+    def test_measured_ratio_is_capped(self):  # TM-22: token báo thấp bất thường không được làm ước thấp đi
+        said = []
+        bad = graph()
+        node(bad, "idea")["label"] = "Nhanh hơn 99 lần"
+
+        def few(url, body, key):
+            few.sent.append(sum(len(m["content"]) if isinstance(m["content"], str) else len(m["content"][0]["text"])
+                                for m in body["messages"]))
+            r = reply(json.dumps(bad, ensure_ascii=False))
+            r["usage"]["prompt_tokens"] = 1
+            return r
+        few.sent = []
+        info = build.ModelInfo(1e-4, 1e-7, None, False)  # giá vào lớn để chênh của phần thêm lộ ra
+        build.run(self.bp, "m", 1, 5, key=KEY, post=few, prices=info, say=said.append)
+        est = [float(x.split("ước tối đa ")[1].split(" USD")[0]) for x in said if "ước tối đa" in x]
+        head = few.sent[0]
+        want = (head / 3.6 + (few.sent[1] - head) / build.CHARS_PER_TOKEN) * 1e-4 + build.MAX_OUT_TOKENS * 1e-7
+        self.assertAlmostEqual(est[1], want, delta=0.001)
+
+    def test_missing_cost_counts_the_upper_estimate(self):  # TM-22: không có usage.cost thì tính mức ước trên
+        def nocost(url, body, key):
+            return {"choices": [{"message": {"content": ""}, "finish_reason": "length"}], "usage": {}}
+        info = build.ModelInfo(1e-6, 1e-6, None, True)
+        res = build.run(self.bp, "m", 0, 5, key=KEY, post=nocost, prices=info, say=self.quiet)
+        self.assertGreaterEqual(res.cost, (build.MAX_OUT_TOKENS + build.REASONING_TOKENS) * 1e-6)
+
+    def test_model_limits_shape_the_request(self):  # review: max_tokens vượt mức model cho, model không suy luận
+        rows = [{"id": "big", "pricing": {"prompt": "0.000004", "completion": "0.00002", "input_cache_write": "0.000005"},
+                 "top_provider": {"max_completion_tokens": 128000}, "supported_parameters": ["reasoning"]},
+                {"id": "small", "pricing": {"prompt": "0.0000001", "completion": "0.0000004"},
+                 "top_provider": {"max_completion_tokens": 32768}, "supported_parameters": ["max_tokens"]}]
+        big = build.model_info("big", lambda url: {"data": rows})
+        self.assertEqual((big.p_in, big.max_out, big.reasoning), (0.000005, 128000, True))  # giá ghi cache cao hơn
+        small = build.model_info("small", lambda url: {"data": rows})
+        fake = Fake(graph())
+        build.run(self.bp, "small", 0, 1, key=KEY, post=fake, prices=small, say=self.quiet)
+        self.assertNotIn("reasoning", fake.bodies[0])
+        self.assertEqual(fake.bodies[0]["max_tokens"], build.MAX_OUT_TOKENS)
+        tiny = build.ModelInfo(1e-7, 4e-7, 20000, True)
+        fake = Fake(graph())
+        build.run(self.bp, "tiny", 0, 1, key=KEY, post=fake, prices=tiny, say=self.quiet)
+        self.assertEqual(fake.bodies[0]["max_tokens"], 20000)
+
     def test_prices_without_a_fixed_rate_are_refused(self):  # review: giá -1 làm trần tiền vô hiệu
         def models(rows):
             return lambda url: {"data": rows}

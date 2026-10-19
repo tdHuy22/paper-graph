@@ -242,7 +242,7 @@ def cmd_serve(a) -> int:
 
 
 def cmd_build(a) -> int:
-    from .build import build  # noqa: PLC0415
+    from .build import build, raw_path  # noqa: PLC0415
 
     if not 0 <= a.rounds <= 6:
         raise InputError("--rounds phải trong khoảng 0–6")
@@ -262,7 +262,9 @@ def cmd_build(a) -> int:
                       say=lambda m: print(safe(m, 500), flush=True))
     print(f"{res.rounds} lượt, {res.cost:.4f} USD")
     if res.graph is None:
-        print("Không có sơ đồ nào đọc được; không ghi file.")
+        print("Không có sơ đồ nào đọc được"
+              + (f"; câu trả lời của model ở {safe(str(raw_path(Path(a.blocks))), 300)}" if res.raw
+                 else "; không ghi file."))
         return 1
     print(f"{safe(str(path), 300)}: {res.errors} lỗi, {res.pg220} PG220"
           + ("" if res.ok else f" — bản nháp; lỗi ở {safe(str(path.with_suffix('.txt')), 300)}: sửa tay hay chạy lại"))

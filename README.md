@@ -61,7 +61,10 @@ dùng toạ độ này. Sơ đồ trên đĩa đổi trong lúc trang đang mở
 
 Dựng sơ đồ không cần Claude Code: `build` gửi chữ bài và chỉ dẫn (lấy từ skill dung-so-do) tới một model qua
 OpenRouter, chạy `check`, gửi lỗi lại cho model sửa, tối đa `--rounds` lượt (mặc định 3) và `--max-usd` (mặc định
-0,5 USD). Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`. Khoá lấy từ biến
+0,5 USD). Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`; câu trả lời
+không đọc được thành sơ đồ (bị cắt, không phải JSON) vẫn ghi ra `bai.graph.raw.txt`. Trước mỗi lượt lệnh in mức tiền
+ước tối đa (tính cả token suy luận, tối đa 8.000; chữ tiếng Việt khoảng 1,7 ký tự mỗi token): model đắt như Opus cần
+nâng `--max-usd`, khoảng 1 USD mỗi lượt với một bài 20 trang. Khoá lấy từ biến
 `OPENROUTER_API_KEY` hay file `~/.config/paper-graph/openrouter.key` (quyền 600); không có cờ nhận khoá. Request đặt
 `data_collection: deny` (nhà cung cấp không lưu, không huấn luyện), nhưng chữ bài vẫn rời máy: bài riêng tư thì dựng
 bằng skill. Đã có `bai.graph.json` thì phải `--force`, và ô đã khoá phải giữ nguyên. Model miễn phí (`…:free`) chỉ chạy khi cho
