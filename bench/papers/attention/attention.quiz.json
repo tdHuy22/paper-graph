@@ -119,6 +119,140 @@
      "quote": "after training for 3.5 days on eight GPUs"
     }
    ]
+  },
+  {
+   "id": "q7",
+   "kind": "mechanism",
+   "q": "Theo bài, vì sao self-attention giúp học quan hệ giữa hai từ ở xa nhau dễ hơn mạng hồi quy?",
+   "choices": [
+    "Vì nó tính trên toàn câu cùng lúc nên tốn ít phép tính hơn mạng hồi quy ở mọi độ dài câu",
+    "Vì nó có nhiều tham số hơn mạng hồi quy nên nhớ được nhiều từ ở xa hơn trong câu dài",
+    "Vì mã vị trí hình sin cho nó biết chính xác khoảng cách giữa mọi cặp từ trong câu",
+    "Vì mọi cặp vị trí nối với nhau qua số bước cố định, đường đi của tín hiệu rất ngắn"
+   ],
+   "answer": 3,
+   "explain": "Mạng hồi quy cần O(n) bước tuần tự để tín hiệu đi giữa hai vị trí; self-attention nối thẳng mọi vị trí, đường càng ngắn càng dễ học phụ thuộc xa.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "connects all positions with a constant number of sequentially executed operations"
+    },
+    {
+     "page": 6,
+     "quote": "the easier it is to learn long-range dependencies"
+    }
+   ]
+  },
+  {
+   "id": "q8",
+   "kind": "mechanism",
+   "q": "Dùng nhiều đầu attention (multi-head) thay cho một đầu lớn khắc phục điều gì?",
+   "choices": [
+    "Một đầu lấy trung bình nên nhoè; nhiều đầu nhìn nhiều kiểu quan hệ ở nhiều vị trí",
+    "Một đầu lớn tốn gấp nhiều lần phép tính, chia nhỏ ra giúp giảm hẳn tổng chi phí của mỗi lớp",
+    "Một đầu không phân biệt được thứ tự từ, nhiều đầu mỗi đầu giữ riêng một phần thông tin vị trí",
+    "Một đầu dễ quá khớp dữ liệu, nhiều đầu đóng vai trò như dropout giúp mô hình bớt học thuộc"
+   ],
+   "answer": 0,
+   "explain": "Với một đầu, việc lấy trung bình làm mất độ phân giải; tổng chi phí của nhiều đầu nhỏ chỉ xấp xỉ một đầu đầy đủ, không giảm hẳn.",
+   "anchors": [
+    {
+     "page": 5,
+     "quote": "With a single attention head, averaging inhibits this."
+    },
+    {
+     "page": 2,
+     "quote": "reduced effective resolution due to averaging attention-weighted positions"
+    }
+   ]
+  },
+  {
+   "id": "q9",
+   "kind": "detail",
+   "q": "Mỗi lớp decoder có thành phần nào mà lớp encoder không có?",
+   "choices": [
+    "Một mạng feed-forward thứ hai, rộng gấp đôi, đặt ngay sau lớp self-attention của decoder",
+    "Một lớp chuẩn hoá riêng đặt trước mỗi khối con thay vì đặt sau phép cộng phần dư",
+    "Một khối con thứ ba làm multi-head attention lên đầu ra của chồng encoder",
+    "Một bộ mã vị trí riêng được học thay cho mã vị trí hình sin dùng ở phía encoder"
+   ],
+   "answer": 2,
+   "explain": "Ngoài self-attention (có che) và feed-forward, decoder chèn thêm attention lên đầu ra encoder: đây là chỗ câu đích nhìn sang câu nguồn.",
+   "anchors": [
+    {
+     "page": 3,
+     "quote": "the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder stack"
+    }
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "evidence",
+   "q": "Thí nghiệm đổi số đầu attention (giữ nguyên lượng tính toán) cho kết quả gì?",
+   "choices": [
+    "Càng nhiều đầu càng tốt, cấu hình 32 đầu cho BLEU cao nhất trong các biến thể đã thử",
+    "Một đầu kém cấu hình tốt nhất 0,9 BLEU, nhưng quá nhiều đầu cũng làm chất lượng giảm",
+    "Số đầu gần như không ảnh hưởng, mọi cấu hình đều chênh nhau dưới 0,1 BLEU trên tập dev",
+    "Một đầu cho kết quả ngang tám đầu nhưng huấn luyện nhanh hơn, nên đầu nhiều là thừa"
+   ],
+   "answer": 1,
+   "explain": "Hàng (A) của Bảng 3: có điểm tối ưu ở giữa, không phải càng nhiều càng tốt.",
+   "anchors": [
+    {
+     "page": 9,
+     "quote": "single-head attention is 0.9 BLEU worse than the best setting"
+    },
+    {
+     "page": 9,
+     "quote": "quality also drops off with too many heads"
+    }
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "limit",
+   "q": "Với chuỗi rất dài, bài đề xuất cải thiện chi phí của self-attention thế nào?",
+   "choices": [
+    "Thay self-attention bằng lớp hồi quy ở các tầng đầu để giảm số phép tính",
+    "Chia chuỗi thành nhiều câu ngắn, dịch riêng từng câu rồi ghép lại",
+    "Mỗi vị trí chỉ nhìn một vùng lân cận; bài để hướng này cho việc sau",
+    "Giảm xuống còn một đầu attention duy nhất khi chuỗi vượt một độ dài"
+   ],
+   "answer": 2,
+   "explain": "Self-attention chỉ nhanh hơn mạng hồi quy khi độ dài chuỗi nhỏ hơn số chiều biểu diễn. Với chuỗi rất dài, bài gợi ý giới hạn mỗi vị trí vào một vùng lân cận (đổi lại đường đi dài hơn) và chưa thử: đây là việc để sau.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "self-attention could be restricted to considering only a neighborhood of size r"
+    },
+    {
+     "page": 7,
+     "quote": "We plan to investigate this approach further in future work."
+    }
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "limit",
+   "q": "Bài chọn mã vị trí hình sin thay vì mã vị trí học được. Bằng chứng trong bài ủng hộ lựa chọn này tới đâu?",
+   "choices": [
+    "Hai cách cho kết quả gần như nhau; khả năng dùng cho câu dài hơn lúc học chỉ là giả thuyết",
+    "Mã hình sin nhỉnh hơn một chút trên tập dev, và bài đã kiểm nó với câu dài hơn lúc học",
+    "Mã học được tốt hơn một chút nhưng tốn bộ nhớ, nên bài chọn hình sin để tiết kiệm tài nguyên",
+    "Bài đã thử trên câu dài gấp đôi lúc học và thấy mã hình sin vẫn giữ nguyên điểm BLEU"
+   ],
+   "answer": 0,
+   "explain": "Hàng (E) của Bảng 3 cho kết quả gần như bằng nhau. Lý do chọn hình sin là nó \"có thể\" giúp xử lý câu dài hơn, điều bài không kiểm bằng thí nghiệm.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "found that the two versions produced nearly identical results"
+    },
+    {
+     "page": 6,
+     "quote": "it may allow the model to extrapolate to sequence lengths longer"
+    }
+   ]
   }
  ]
 }

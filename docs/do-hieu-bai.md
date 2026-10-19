@@ -16,7 +16,8 @@ python3 -m paper_graph view papers/rag/rag.graph.json --pdf ../pdf-translator/da
 - Trang làm bài: hỏi người đọc đã đọc bằng cách nào, đo thời gian từ lúc bấm "Bắt đầu", có phương án "Không biết"
   (để đoán bừa không làm nhiễu điểm), chấm ngay, hiện đáp án kèm câu trích, và cho một dòng kết quả JSON để chép lại.
 - Đáp án nằm trong trang (đây là bài tự kiểm): người đọc phải tự giác không xem mã trang.
-- Có sẵn: `bench/papers/attention/attention.quiz.json`, `bench/papers/rag/rag.quiz.json` (6 câu mỗi bài). Sơ đồ: Attention
+- Có sẵn: `bench/papers/attention/attention.quiz.json`, `bench/papers/rag/rag.quiz.json` (12 câu mỗi bài: q1–q6 do người dựng công
+  cụ soạn; q7–q12 do một agent soạn chỉ từ chữ bài, không được đọc sơ đồ hay đáp án bộ đo, 2026-10-19). Sơ đồ: Attention
   có sẵn `bench/papers/attention/attention.graph.json`; RAG ở `papers/rag/rag.graph.json`: skill dung-so-do
   dựng (lượt đo 7, trước khi có bộ câu hỏi), một agent không đọc câu hỏi soát 50 ô với nguyên văn, sửa 28 ô, cả 50 ô
   đã khoá (2026-10-19). Hai trang HTML nhúng chữ và ảnh của bài nên không đưa vào git; tạo lại bằng hai lệnh trên
@@ -51,6 +52,9 @@ python3 -m paper_graph view papers/rag/rag.graph.json --pdf ../pdf-translator/da
 
 ## Giới hạn
 
-- 6 câu mỗi bài là ít; một câu khó hay dễ bất thường làm lệch điểm. Thêm câu trước khi đo trên nhiều người.
-- Câu hỏi do người dựng công cụ soạn, có thể vô tình hợp với cách sơ đồ trình bày; nên nhờ người khác soạn thêm.
+- 12 câu mỗi bài (mức tối đa của định dạng) vẫn ít; một câu khó hay dễ bất thường làm lệch điểm. Có thể tách điểm
+  q1–q6 và q7–q12 để xem hai nhóm câu có cho cùng chiều không. Hai nhóm còn khác nhau về độ dài và độ khó (q7–q12 dài
+  và cụ thể hơn), nên chênh giữa hai nhóm không chỉ do cách soạn.
+- q1–q6 do người dựng công cụ soạn, có thể vô tình hợp với cách sơ đồ trình bày; q7–q12 soạn không nhìn sơ đồ nhưng
+  vẫn do model soạn. Nên nhờ người khác soạn thêm.
 - Đây không phải nghiên cứu có kiểm soát: không giấu được người đọc đang ở điều kiện nào.

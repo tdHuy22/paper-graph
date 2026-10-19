@@ -251,8 +251,16 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    `papers/rag/rag.html` (2,5 MB) và `rag.quiz.html`, `.gitignore` thêm `papers/**/*.html`; thử trong trình duyệt:
    tầng dưới, thẻ ô "đã khoá", trang làm bài, console sạch. `docs/do-hieu-bai.md` ghi lệnh xuất. Cấu hình
    `papers-rag` thêm vào `.claude/launch.json` (không commit).
-4. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban); trước đó dựng và khoá sơ đồ RAG trong
-   `papers/rag/`.
+4. **Bộ câu hỏi lên 12 câu mỗi bài: xong, đã commit** (2026-10-19). q7–q12 của Attention và RAG do agent Opus soạn
+   chỉ từ đầu ra `read` (cấm đọc `*.graph.json`, `*.gold.json`, `papers/`), bù hai loại còn thiếu: mỗi bài 2 `limit`,
+   1 `detail`, 1 `evidence`, 2 `mechanism`. Mình đối chiếu cả 12 đáp án với nguyên văn: đúng. Cổng chốt việc (rủi ro
+   vừa, reviewer sonnet): 0 sai, 4 dễ tranh cãi, 5 nhỏ; sửa cả 9 trừ hai mục chỉ ghi để biết (RAG q7 gần q2, RAG q8 giữ
+   ý): viết lại Attention q11 (hướng cho chuỗi dài, bỏ vế "bình phương" không có neo), RAG q9 (số đoạn k thay câu đã lộ
+   ở q1, q5), RAG q10 có chủ ngữ, RAG q11 thêm phương án nhiễu về giám sát, nhiễu dè dặt ở hai câu q12, rút đáp án dài.
+   Đáp án là phương án dài nhất: Attention 2/12, RAG 3/12. `quiz` 0 lỗi cả hai bài, 221 test đạt (biên nhận); trang
+   `papers/rag/rag.quiz.html` xuất lại. `docs/do-hieu-bai.md` ghi nguồn gốc và khác biệt của hai nhóm câu.
+5. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban): đủ đồ cho cả hai bài (sơ đồ đã khoá, 12
+   câu mỗi bài).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 

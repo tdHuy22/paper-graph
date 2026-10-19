@@ -119,6 +119,128 @@
      "quote": "generate more specific, diverse and factual language"
     }
    ]
+  },
+  {
+   "id": "q7",
+   "kind": "mechanism",
+   "q": "Vì sao RAG-Sequence không giải mã được bằng một lượt beam search thông thường như RAG-Token?",
+   "choices": [
+    "Vì bộ tra phải chạy lại sau mỗi từ sinh ra, làm beam search chậm tới mức không dùng được",
+    "Vì xác suất cả câu là tổng theo từng tài liệu, không tách được thành xác suất từng từ",
+    "Vì BART chỉ nhận một tài liệu mỗi lần, nên mọi tài liệu phải được nối thành một chuỗi dài",
+    "Vì RAG-Sequence sinh câu trả lời ngắn, beam search không cải thiện gì so với chọn tham lam"
+   ],
+   "answer": 1,
+   "explain": "RAG-Token gộp qua tài liệu ở từng bước nên là một bộ sinh tự hồi quy bình thường. RAG-Sequence phải chạy beam cho từng tài liệu rồi cộng xác suất các giả thuyết.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "does not break into a conventional per-token likelihood"
+    },
+    {
+     "page": 4,
+     "quote": "we run beam search for each document z"
+    }
+   ]
+  },
+  {
+   "id": "q8",
+   "kind": "mechanism",
+   "q": "Ví dụ sinh câu hỏi Jeopardy về Hemingway cho thấy hai loại bộ nhớ phối hợp thế nào?",
+   "choices": [
+    "BART sinh nháp cả câu trước, rồi bộ tra tìm đoạn Wikipedia để sửa các tên sách bị sai",
+    "Mỗi tên sách được chép nguyên văn từ đoạn tra được, BART chỉ nối các mảnh lại thành câu",
+    "Bộ tra chọn một đoạn duy nhất cho cả câu, BART dựa hoàn toàn vào đoạn đó để sinh",
+    "Đoạn tra được dẫn hướng ở từ đầu tên sách, phần còn lại BART tự viết từ tham số"
+   ],
+   "answer": 3,
+   "explain": "Xác suất hậu nghiệm của tài liệu cao ở từ đầu của tên sách rồi phẳng ra: phần còn lại của tên đã nằm sẵn trong tham số của BART. Tên sách có trong đoạn tra được, nhưng sau từ đầu tiên mô hình không cần dựa vào đoạn nữa.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "after the first token of each book is generated, the document posterior flattens"
+    },
+    {
+     "page": 6,
+     "quote": "the non-parametric component helps to guide the generation"
+    }
+   ]
+  },
+  {
+   "id": "q9",
+   "kind": "detail",
+   "q": "Lúc huấn luyện, bộ tra lấy bao nhiêu đoạn cho mỗi câu hỏi, và lúc kiểm thì sao?",
+   "choices": [
+    "5 hoặc 10 đoạn khi huấn luyện; lúc kiểm, số đoạn chọn theo tập dev",
+    "Đúng 1 đoạn để BART không bị nhiễu; lúc kiểm cũng chỉ lấy 1 đoạn",
+    "20 đoạn khi huấn luyện; lúc kiểm giảm còn 5 đoạn để chạy nhanh hơn",
+    "100 đoạn khi huấn luyện, bằng số đoạn DPR trả về; lúc kiểm cũng vậy"
+   ],
+   "answer": 0,
+   "explain": "Bài thử k bằng 5 và 10 khi huấn luyện; k lúc kiểm được chọn bằng dữ liệu dev, không cố định trước.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "for training and set k for test time using dev data"
+    }
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "evidence",
+   "q": "Bằng chứng nào cho thấy sinh câu trả lời có lợi hơn trích một đoạn từ tài liệu tra được?",
+   "choices": [
+    "Trên NQ, RAG trả lời đúng gần hết câu hỏi mà mô hình trích đoạn bỏ sót vì tra sai tài liệu",
+    "Người chấm thích câu trả lời của RAG hơn mô hình trích đoạn trong hơn 40% số cặp so sánh",
+    "RAG trả lời đúng 11,8% số câu NQ không có đoạn nào chứa đáp án; mô hình trích đoạn được 0%",
+    "RAG đạt điểm cao hơn mô hình trích đoạn trên FEVER dù không được giám sát việc tra cứu"
+   ],
+   "answer": 2,
+   "explain": "Mô hình trích đoạn chỉ chọn được đoạn chữ có sẵn; RAG có thể ghép manh mối và kiến thức trong tham số để sinh ra đáp án.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "achieving 11.8% accuracy in such cases for NQ"
+    }
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "limit",
+   "q": "Bài nhấn mạnh RAG không cần giám sát việc tra tài liệu nào. Bài tự lưu ý điều gì làm nhẹ tuyên bố này ở hỏi đáp mở?",
+   "choices": [
+    "Kết quả hỏi đáp mở chỉ đo trên tập dev, chưa đo trên tập kiểm tra chính thức của từng tập",
+    "Chỉ mục Wikipedia được dựng riêng cho các câu hỏi trong tập huấn luyện của từng tập dữ liệu",
+    "Bộ tra được tinh chỉnh thêm bằng nhãn đoạn đúng của FEVER trước khi dùng cho hỏi đáp mở",
+    "Bộ tra được khởi tạo từ DPR, vốn đã học có giám sát trên Natural Questions và TriviaQA"
+   ],
+   "answer": 3,
+   "explain": "Lúc tinh chỉnh RAG không được chỉ tài liệu nào đúng, nhưng bộ tra ban đầu đã được dạy tra tài liệu chứa đáp án cho chính hai tập này.",
+   "anchors": [
+    {
+     "page": 5,
+     "quote": "which uses retrieval supervision on Natural Questions and TriviaQA"
+    }
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "limit",
+   "q": "Khi thay bộ tra học được bằng BM25 (khớp từ, cố định), bài thấy gì?",
+   "choices": [
+    "BM25 kém hơn ở mọi việc, kể cả FEVER, dù chênh ở FEVER rất nhỏ",
+    "BM25 tốt nhất ở FEVER; ở các việc khác bộ tra học được thắng",
+    "BM25 ngang bộ tra học được ở hỏi đáp mở, có lẽ vì câu hỏi nhiều tên riêng",
+    "BM25 tốt hơn ở các việc sinh văn bản; bộ tra học được chỉ thắng ở hỏi đáp"
+   ],
+   "answer": 1,
+   "explain": "Bộ tra học được không thắng ở mọi nơi: với FEVER, khớp từ theo tên thực thể đủ tốt, thậm chí tốt hơn. Lời giải thích \"có lẽ\" là phỏng đoán của bài.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "For FEVER, BM25 performs best, perhaps since FEVER claims are heavily entity-centric"
+    }
+   ]
   }
  ]
 }
