@@ -241,6 +241,51 @@ def cmd_serve(a) -> int:
     return 0
 
 
+def cmd_build(a) -> int:
+    from .build import build  # noqa: PLC0415
+
+    if not 0 <= a.rounds <= 6:
+        raise InputError("--rounds phải trong khoảng 0–6")
+    if not 0 < a.max_usd <= 5:
+        raise InputError("--max-usd phải trong khoảng (0, 5]")
+    if a.model.endswith(":free") and not a.allow_training:
+        raise InputError(f"{a.model} là model miễn phí: OpenRouter chỉ chạy khi cho nhà cung cấp huấn luyện trên chữ bài. "
+                         "Bài đã công khai thì thêm --allow-training (và bật \"Free model training\" ở "
+                         "openrouter.ai/settings/privacy); bài riêng tư thì dùng --model deepseek/deepseek-v4-pro hay skill")
+    if a.allow_training:
+        print(f"CẢNH BÁO: chữ của bài gửi tới OpenRouter ({safe(a.model, 100)}) với data_collection: allow — nhà "
+              "cung cấp model miễn phí được lưu và dùng nó để huấn luyện. Chỉ dùng cho bài đã công khai.", flush=True)
+    else:
+        print(f"Chữ của bài sẽ gửi tới OpenRouter ({safe(a.model, 100)}), nhà cung cấp không lưu, không huấn luyện "
+              "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model local.", flush=True)
+    res, path = build(Path(a.blocks), a.model, a.rounds, a.max_usd, force=a.force, allow_training=a.allow_training,
+                      say=lambda m: print(safe(m, 500), flush=True))
+    print(f"{res.rounds} lượt, {res.cost:.4f} USD")
+    if res.graph is None:
+        print("Không có sơ đồ nào đọc được; không ghi file.")
+        return 1
+    print(f"{safe(str(path), 300)}: {res.errors} lỗi, {res.pg220} PG220"
+          + ("" if res.ok else f" — bản nháp; lỗi ở {safe(str(path.with_suffix('.txt')), 300)}: sửa tay hay chạy lại"))
+    return 0 if res.ok else 1
+
+
+def cmd_quiz(a) -> int:
+    from . import quiz as quiz_mod  # noqa: PLC0415
+
+    path = Path(a.quiz)
+    q, diags = quiz_mod.load(path, Path(a.blocks) if a.blocks else None)
+    errors = [d for d in diags if d.level == "error"]
+    for d in diags:
+        print(f"{'lỗi' if d.level == 'error' else 'cảnh báo'} {d.code} {d.where}: {d.msg}" + (f"\n  → {d.hint}" if d.hint else ""))
+    if errors:
+        print(f"{len(errors)} lỗi: chưa xuất trang làm bài")
+        return 1
+    out = Path(a.output) if a.output else path.with_name(path.name.removesuffix(".quiz.json") + ".quiz.html")
+    write_atomic(out, quiz_mod.page(q).encode("utf-8"))
+    print(f"{safe(str(out), 300)}: {len(q.questions)} câu, câu trích đều có thật trong bài")
+    return 0
+
+
 def cmd_fmt(a) -> int:
     for name in a.graphs:
         path = Path(name)
@@ -311,6 +356,25 @@ def main(argv=None) -> int:
     w.add_argument("--no-images", action="store_true", help="không nhúng ảnh nào")
     w.add_argument("--no-crops", action="store_true", help="không nhúng ảnh đoạn gốc của câu trích (file nhẹ hơn)")
     w.set_defaults(fn=cmd_view)
+
+    u = sub.add_parser("build", help="dựng sơ đồ bằng model qua OpenRouter (khoá: biến OPENROUTER_API_KEY hay "
+                                     "~/.config/paper-graph/openrouter.key)")
+    u.add_argument("blocks")
+    u.add_argument("--model", default="nvidia/nemotron-3.5-super-vl:free",
+                   help="id model trên OpenRouter (mặc định miễn phí, cần --allow-training; trả phí và tốt hơn: "
+                        "deepseek/deepseek-v4-pro)")
+    u.add_argument("--rounds", type=int, default=3, help="số lượt sửa theo lỗi của check sau lượt đầu (mặc định 3)")
+    u.add_argument("--max-usd", type=float, default=0.5, help="trần tiền cho cả lần chạy (mặc định 0,5 USD)")
+    u.add_argument("--force", action="store_true", help="dựng lại khi đã có graph.json (ô khoá phải giữ nguyên)")
+    u.add_argument("--allow-training", action="store_true",
+                   help="chỉ cho model :free: cho nhà cung cấp lưu và huấn luyện trên chữ bài (bài công khai)")
+    u.set_defaults(fn=cmd_build)
+
+    z = sub.add_parser("quiz", help="kiểm bộ câu hỏi hiểu bài (<tên>.quiz.json) rồi xuất trang làm bài HTML")
+    z.add_argument("quiz")
+    z.add_argument("--blocks", help="mặc định: paper.blocks trong bộ câu hỏi")
+    z.add_argument("-o", "--output", help="mặc định: cạnh bộ câu hỏi, đuôi .quiz.html")
+    z.set_defaults(fn=cmd_quiz)
 
     t = sub.add_parser("fmt", help="ghi lại graph.json theo định dạng chung: mỗi ô, cạnh, nhóm một dòng")
     t.add_argument("graphs", nargs="+")

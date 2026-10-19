@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="eyebrow">Câu hỏi hiểu bài</p>
+  <h1 id="title"></h1>
+  <section id="start" class="box">
+    <p>Trả lời mà không mở lại bài hay sơ đồ. Không chắc thì chọn phương án bạn nghĩ đúng nhất; đừng đoán bừa nếu hoàn toàn không biết, chọn "Không biết".</p>
+    <fieldset>
+      <legend>Bạn vừa đọc bài này bằng cách nào?</legend>
+      <label><input type="radio" name="how" value="chu"> Đọc chữ (bản gốc hay bản dịch)</label>
+      <label><input type="radio" name="how" value="so-do"> Đọc qua sơ đồ</label>
+      <label><input type="radio" name="how" value="ca-hai"> Cả hai</label>
+    </fieldset>
+    <p id="start-err" class="err" role="alert"></p>
+    <button id="begin" type="button">Bắt đầu</button>
+  </section>
+  <form id="quiz" hidden></form>
+  <section id="result" class="box" hidden aria-live="polite"></section>
+</main>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>{{SCRIPT}}</script>
+</body>
+</html>

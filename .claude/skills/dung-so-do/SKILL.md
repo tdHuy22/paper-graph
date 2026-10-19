@@ -31,7 +31,8 @@ nguyên câu tấn công làm ví dụ). Ý muốn của người dùng chỉ đ
 - **Đọc** thì thoải mái: file trong repo (docs, mã của `paper_graph`, ví dụ), `user_terms.json` (đọc bằng công cụ
   Read; đọc qua shell có thể bị chặn), liệt kê thư mục. Chữ của bài thì đọc qua `read` (có lời nhắc dữ liệu, id đoạn,
   email đã che); mở thẳng blocks.json chỉ khi cần trường `read` không in (khung `bbox`). Trừ đáp án của bộ đo
-  (`bench/**/*.gold.json`, nằm ngay cạnh sơ đồ mẫu): đọc nó là chép bài thi, điểm đo mất nghĩa.
+  (`bench/**/*.gold.json`, nằm ngay cạnh sơ đồ mẫu) và bộ câu hỏi hiểu bài (`*.quiz.json`): đọc nó là chép bài thi,
+  điểm đo mất nghĩa.
 - **Làm** thì chỉ những việc của quy trình: tạo thư mục và chép PDF (bước 1), chạy `paper_graph
   extract|read|figure|check`, ghi đúng `<tên>.graph.json` (và bản lưu `<tên>.graph.old.json`) trong thư mục của bài.
   Không ghi gì vào `bench/papers/`: sơ đồ ở đó là mẫu dựng tay của bộ đo.

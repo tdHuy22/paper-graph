@@ -41,12 +41,16 @@ python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
 ../pdf-translator/.venv/bin/python -m paper_graph view bai.graph.json            # trình xem bai.html, chạy offline
 ../pdf-translator/.venv/bin/python -m paper_graph serve bai.graph.json           # trình xem có chế độ sửa, http://127.0.0.1:8742/
 python3 -m paper_graph fmt bai.graph.json                                       # định dạng chung: mỗi ô một dòng
+python3 -m paper_graph quiz bai.quiz.json                                       # câu hỏi hiểu bài → trang làm bài
+python3 -m paper_graph build bai.blocks.json --allow-training                  # dựng sơ đồ bằng model miễn phí qua OpenRouter
 ```
 
 `view` ghi một file HTML tự chứa: tầng đầu, bấm ô để xem giải thích và câu trích nguyên văn (kèm ảnh đoạn gốc),
 ô có ▸ mở ra tầng dưới. Thẻ của ô hiện các hình, bảng liên quan, kèm lý do gắn: trường `figure` của ô, câu trích nằm ở
 chú thích, ô nhắc "Bảng 2", hình của ô bằng chứng nối vào, hay hình ở tầng dưới. Bấm hình để phóng to; nút "Hình và
-bảng" liệt kê mọi hình của bài kèm các ô dùng nó. Chạy bằng `python3` thường cũng được, chỉ là không có ảnh (cắt ảnh
+bảng" liệt kê mọi hình của bài kèm các ô dùng nó. Nút "Tự đoán trước" bật chế độ học: mở một ô có tầng dưới thì trang hỏi
+bạn nghĩ tầng dưới có gì trước, rồi đặt dự đoán cạnh các ô thật để bạn tự tick ý đã đoán trúng (lưu trong trình duyệt,
+theo bài). Tự viết ra trước khi xem giúp hiểu và nhớ hơn chỉ xem sơ đồ dựng sẵn. Chạy bằng `python3` thường cũng được, chỉ là không có ảnh (cắt ảnh
 cần PyMuPDF). Sơ đồ phải qua `check` 0 lỗi mới xuất được.
 
 `serve` mở cùng trình xem trên máy chủ cục bộ (chỉ 127.0.0.1) và cho sửa: sửa nhãn, thuật ngữ, giải thích trong thẻ
@@ -54,6 +58,18 @@ cần PyMuPDF). Sơ đồ phải qua `check` 0 lỗi mới xuất được.
 chỗ khác (bàn phím: Alt + mũi tên), "Dàn lại tầng này". Nội dung ghi vào `bai.graph.json`; toạ độ ghi vào
 `bai.layout.json` cạnh đó, nên dựng lại sơ đồ không mất chỗ các ô đã kéo (ô còn id thì còn chỗ), và `view` cũng
 dùng toạ độ này. Sơ đồ trên đĩa đổi trong lúc trang đang mở (ví dụ vừa dựng lại) thì trang báo tải lại, không ghi đè.
+
+Dựng sơ đồ không cần Claude Code: `build` gửi chữ bài và chỉ dẫn (lấy từ skill dung-so-do) tới một model qua
+OpenRouter, chạy `check`, gửi lỗi lại cho model sửa, tối đa `--rounds` lượt (mặc định 3) và `--max-usd` (mặc định
+0,5 USD). Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`. Khoá lấy từ biến
+`OPENROUTER_API_KEY` hay file `~/.config/paper-graph/openrouter.key` (quyền 600); không có cờ nhận khoá. Request đặt
+`data_collection: deny` (nhà cung cấp không lưu, không huấn luyện), nhưng chữ bài vẫn rời máy: bài riêng tư thì dựng
+bằng skill. Đã có `bai.graph.json` thì phải `--force`, và ô đã khoá phải giữ nguyên. Model miễn phí (`…:free`) chỉ chạy khi cho
+nhà cung cấp huấn luyện trên chữ gửi đi: bật "Free model training" trong cài đặt OpenRouter và thêm `--allow-training`
+(chỉ nhận model `:free`); chỉ dùng cho bài đã công khai.
+
+Đo người đọc có hiểu hơn khi đọc qua sơ đồ không: bộ câu hỏi `bai.quiz.json` (mỗi câu neo về câu trích có thật),
+lệnh `quiz` xuất trang làm bài tự chấm; quy trình đo đổi chéo ở [docs/do-hieu-bai.md](docs/do-hieu-bai.md).
 
 Dựng sơ đồ: trong repo này, nhờ Claude Code "dựng sơ đồ cho bài X". Skill
 [dung-so-do](.claude/skills/dung-so-do/SKILL.md) đọc bài bằng `read`, viết `bai.graph.json`, chạy `check` và sửa tới khi

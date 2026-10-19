@@ -1,0 +1,124 @@
+{
+ "version": 1,
+ "paper": {
+  "title": "Attention Is All You Need",
+  "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+  "blocks": "attention.blocks.json"
+ },
+ "questions": [
+  {
+   "id": "q1",
+   "kind": "big",
+   "q": "Điểm cốt lõi khiến Transformer khác các mô hình dịch máy trước đó là gì?",
+   "choices": [
+    "Thêm attention vào mạng hồi quy (RNN) để nhớ câu dài hơn",
+    "Chỉ dùng attention, bỏ hẳn hồi quy và tích chập",
+    "Dùng mạng tích chập sâu hơn thay cho RNN",
+    "Học trước trên lượng văn bản rất lớn rồi tinh chỉnh"
+   ],
+   "answer": 1,
+   "explain": "Bài bỏ cả hồi quy lẫn tích chập; mọi liên hệ giữa các từ đi qua attention.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "dispensing with recurrence and convolutions entirely"
+    }
+   ]
+  },
+  {
+   "id": "q2",
+   "kind": "mechanism",
+   "q": "Vì sao tích vô hướng giữa query và key được chia cho √d_k?",
+   "choices": [
+    "Để chia đều phép tính cho các GPU khi d_k lớn và câu dài",
+    "Để giá trị cùng thang với mã vị trí (positional encoding) cộng vào",
+    "Vì khi d_k lớn, tích vô hướng rất lớn đẩy softmax vào vùng gradient nhỏ",
+    "Để mỗi đầu attention có cùng tổng trọng số bất kể số chiều"
+   ],
+   "answer": 2,
+   "explain": "Tích vô hướng lớn làm softmax gần như chọn một vị trí, gradient gần bằng 0; chia √d_k giữ nó ở vùng học được.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "for large values of dk, the dot products grow large in magnitude"
+    }
+   ]
+  },
+  {
+   "id": "q3",
+   "kind": "mechanism",
+   "q": "Không có hồi quy, mô hình biết thứ tự các từ bằng cách nào?",
+   "choices": [
+    "Cộng vào embedding một mã vị trí tính bằng hàm sin và cos",
+    "Đọc câu từ trái sang phải từng bước như mạng hồi quy",
+    "Chèn trước mỗi từ một token đặc biệt ghi số thứ tự của nó",
+    "Không cần gì thêm: attention tự nhận ra thứ tự các từ"
+   ],
+   "answer": 0,
+   "explain": "Bài phải đưa thông tin vị trí vào, vì attention tự nó không phân biệt thứ tự.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "we must inject some information about the relative or absolute position of the tokens"
+    }
+   ]
+  },
+  {
+   "id": "q4",
+   "kind": "mechanism",
+   "q": "Self-attention trong decoder bị che (mask) để làm gì?",
+   "choices": [
+    "Để giảm bộ nhớ khi câu đích dài hơn câu nguồn nhiều",
+    "Để decoder không nhìn sang câu nguồn trong lúc sinh câu",
+    "Để dự đoán ở vị trí i chỉ dựa vào các từ đứng trước nó",
+    "Để các đầu attention buộc phải học những việc khác nhau"
+   ],
+   "answer": 2,
+   "explain": "Khi sinh câu, từ sau chưa có; che các vị trí sau giữ cho lúc học giống lúc dùng.",
+   "anchors": [
+    {
+     "page": 3,
+     "quote": "can depend only on the known outputs at positions less than i"
+    }
+   ]
+  },
+  {
+   "id": "q5",
+   "kind": "evidence",
+   "q": "Trên bản dịch Anh–Đức WMT 2014, Transformer đạt kết quả nào?",
+   "choices": [
+    "28,4 BLEU, hơn các mô hình tốt nhất trước đó, kể cả ensemble",
+    "41,8 BLEU, gần gấp đôi các mô hình tốt nhất trước đó",
+    "Ngang các mô hình tốt nhất trước đó nhưng huấn luyện nhanh hơn",
+    "Kém mô hình tích chập tốt nhất nhưng huấn luyện rẻ hơn nhiều"
+   ],
+   "answer": 0,
+   "explain": "41,8 BLEU là kết quả Anh–Pháp, không phải Anh–Đức.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "28.4 BLEU on the WMT 2014 English-to-German translation task"
+    }
+   ]
+  },
+  {
+   "id": "q6",
+   "kind": "evidence",
+   "q": "Bài nói gì về chi phí huấn luyện mô hình lớn?",
+   "choices": [
+    "Khoảng ba tuần trên 32 GPU, ngang các mô hình tốt nhất trước",
+    "3,5 ngày trên 8 GPU, ít hơn nhiều so với các mô hình trước",
+    "Bài không nêu thời gian hay số GPU dùng để huấn luyện",
+    "Tốn hơn các mô hình trước nhưng bù lại chính xác hơn hẳn"
+   ],
+   "answer": 1,
+   "explain": "Tuyên bố của bài là đạt kết quả tốt hơn với chi phí huấn luyện nhỏ hơn nhiều.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "after training for 3.5 days on eight GPUs"
+    }
+   ]
+  }
+ ]
+}

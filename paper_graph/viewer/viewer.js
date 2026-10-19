@@ -208,7 +208,11 @@
     if (sel) card(sel); else intro();
     if (focus) focusNode(sel !== null ? sel : order(D.tiers[key])[0]);
   }
-  function open(id) { go(id, null, true); }
+  function open(id) {
+    var n = node(id);
+    if (predicting && n && n.children && !guessOf(id)) { askGuess(id); return; }
+    go(id, null, true);
+  }
   function select(id, focus) {
     var n = node(id);
     if (!n) return;
@@ -433,9 +437,11 @@
     var ids = Object.keys(D.figures || {});
     c.appendChild(el("h2", "", "Hình và bảng của bài (" + ids.length + ")"));
     ids.forEach(function (id) {
-      var box = figureBox(id, "", null), users = (fig(id).nodes || []).filter(function (x) { return node(x); });
-      if (!users.length) box.appendChild(el("p", "users muted", "Chưa ô nào dùng hình này."));
-      else {
+      var box = figureBox(id, "", null), all = (fig(id).nodes || []).filter(function (x) { return node(x); });
+      var users = all.filter(function (x) { return !unseen(x); }), hidden = all.length - users.length;
+      if (hidden) box.appendChild(el("p", "users muted", hidden + " ô ở tầng bạn chưa đoán dùng hình này (ẩn tới khi đoán)."));
+      if (!all.length) box.appendChild(el("p", "users muted", "Chưa ô nào dùng hình này."));
+      else if (users.length) {
         box.appendChild(el("p", "users muted", "Ô dùng hình này:"));
         var ul = el("ul", "links");
         users.forEach(function (u) {
@@ -452,9 +458,147 @@
     c.focus();
   }
 
+  // ---------------------------------------------------------------- tự đoán trước rồi mở (Mốc 5)
+  // Người đọc viết ra điều mình nghĩ tầng dưới sẽ có, rồi mới mở và tự so: tự tạo ra trước khi xem giúp nhớ và hiểu
+  // hơn chỉ xem sơ đồ dựng sẵn. Dự đoán chỉ lưu trong trình duyệt này (localStorage, theo SHA-256 của bài).
+  var predicting = false;
+  var STORE = "paper-graph:guess:" + String(D.sha256 || "");
+  function load(k, fallback) {
+    try { var v = window.localStorage.getItem(k); return v === null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+  }
+  var warned = false;
+  function save(k, v) {
+    try { window.localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; }
+  }
+  var mem = null;  // bản trong bộ nhớ: localStorage đầy, bị chặn hay ở chế độ riêng tư thì dự đoán vẫn còn tới khi đóng trang
+  function guesses() {
+    if (mem) return mem;
+    var g = load(STORE, {});
+    return g && typeof g === "object" && !Array.isArray(g) ? g : {};
+  }
+  function guessOf(id) {
+    var g = guesses();
+    var v = Object.prototype.hasOwnProperty.call(g, id) ? g[id] : null;
+    return v && typeof v.text === "string" ? v : null;
+  }
+  function putGuess(id, v) {
+    var g = Object.assign(Object.create(null), guesses());
+    if (v === null) delete g[id]; else g[id] = v;
+    mem = g;
+    if (!save(STORE, g) && !warned) {
+      warned = true;
+      say("Trình duyệt không cho lưu: dự đoán chỉ giữ tới khi đóng trang.", true);
+    }
+  }
+  // ô nằm dưới một ô cha (ở bậc nào cũng được) mà người đọc chưa đoán: đang tự đoán thì chưa được thấy nhãn của nó
+  function unseen(id) {
+    if (!predicting) return false;
+    for (var p = (node(id) || {}).parent; p; p = (node(p) || {}).parent) if (!guessOf(p)) return true;
+    return false;
+  }
+  function childrenOf(id) {
+    var L = D.tiers[id];
+    return L ? order(L).filter(function (x) { return node(x); }) : [];
+  }
+
+  function askGuess(id) {
+    var n = node(id);
+    if ((n.parent || "") !== tier) go(n.parent || "", id, false);
+    selected = id;
+    mark();
+    var c = document.getElementById("card");
+    while (c.firstChild) c.removeChild(c.firstChild);
+    c.appendChild(el("span", "kind", "Tự đoán trước"));
+    c.appendChild(el("h2", "", n.label));
+    c.appendChild(el("p", "", "Tầng dưới của ô này có " + n.children + " ô. Trước khi mở, viết ra bạn nghĩ chúng là gì: " +
+      "các bước, các tuyên bố, hay các khái niệm, mỗi ý một dòng."));
+    var form = el("form", "editform");
+    var wrap = el("label", "fld");
+    wrap.htmlFor = "guess-text";
+    wrap.appendChild(el("span", "", "Dự đoán của bạn"));
+    var ta = el("textarea", "");
+    ta.id = "guess-text";
+    ta.rows = 6;
+    ta.maxLength = 2000;
+    var old = guessOf(id);
+    if (old) ta.value = old.text;
+    wrap.appendChild(ta);
+    form.appendChild(wrap);
+    var err = el("p", "errs");
+    err.setAttribute("role", "alert");
+    form.appendChild(err);
+    var row = el("div", "row"), go1 = el("button", "", "Mở và so"), skip = el("button", "", "Bỏ qua, mở luôn");
+    go1.type = "submit";
+    skip.type = "button";
+    row.appendChild(go1);
+    row.appendChild(skip);
+    form.appendChild(row);
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      if (ta.value.trim().length < 10) {
+        err.textContent = "Viết ít nhất một ý (10 ký tự) trước khi mở.";
+        ta.focus();
+        return;
+      }
+      putGuess(id, { text: ta.value.trim(), hits: [], at: new Date().toISOString().slice(0, 10) });
+      go(id, null, true);
+    });
+    ta.addEventListener("input", function () { err.textContent = ""; });
+    skip.addEventListener("click", function () { go(id, null, true); });
+    var box = el("div", "edit");
+    box.appendChild(form);
+    c.appendChild(box);
+    ta.focus();
+  }
+
+  // đặt điều người đọc đoán cạnh các ô thật; người đọc tự tick ý mình đã đoán trúng
+  function compare(c, id) {
+    var g = guessOf(id);
+    if (!g) return;
+    var kids = childrenOf(id), hits = Array.isArray(g.hits) ? g.hits.filter(function (x) { return kids.indexOf(x) >= 0; }) : [];
+    var box = el("div", "guess");
+    box.appendChild(el("h3", "", "Bạn đã đoán"));
+    box.appendChild(el("p", "guess-text", g.text));
+    box.appendChild(el("h3", "", "Tầng dưới thật: tick ý bạn đã đoán trúng"));
+    var score = el("p", "muted", "");
+    score.setAttribute("aria-live", "polite");
+    function show() { score.textContent = "Trúng " + hits.length + "/" + kids.length + " ý."; }
+    var ul = el("ul", "links");
+    kids.forEach(function (k) {
+      var li = el("li", ""), lab = el("label", "hit"), cb = el("input", "");
+      cb.type = "checkbox";
+      cb.checked = hits.indexOf(k) >= 0;
+      cb.addEventListener("change", function () {
+        hits = hits.filter(function (x) { return x !== k; });
+        if (cb.checked) hits.push(k);
+        putGuess(id, { text: g.text, hits: hits, at: g.at });
+        show();
+      });
+      lab.appendChild(cb);
+      lab.appendChild(el("span", "", " " + node(k).label));
+      li.appendChild(lab);
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    show();
+    box.appendChild(score);
+    var again = el("button", "", "Đoán lại");
+    again.type = "button";
+    again.addEventListener("click", function () { askGuess(id); });  // bản cũ còn tới khi gửi bản mới
+    var row = el("div", "row");
+    row.appendChild(again);
+    box.appendChild(row);
+    c.appendChild(box);
+  }
+
   function intro() {
     var c = document.getElementById("card");
     while (c.firstChild) c.removeChild(c.firstChild);
+    if (tier && guessOf(tier)) {
+      c.appendChild(el("p", "muted", "Tầng dưới của «" + ((node(tier) || {}).label || tier) + "»."));
+      compare(c, tier);
+      return;
+    }
     c.appendChild(el("p", "muted", tier ? "Tầng dưới của «" + ((node(tier) || {}).label || tier) + "»." :
       "Tầng đầu: bức tranh lớn của bài."));
     c.appendChild(el("p", "muted", "Bấm một ô để xem giải thích, câu trích nguyên văn và hình liên quan. Ô có dấu ▸ mở ra được tầng dưới."));
@@ -480,7 +624,15 @@
       c.appendChild(b);
     }
     if (D.edit) editTools(c, id, n);
-    var rf = (n.figures || []).filter(function (r) { return fig(r.id); });
+    if (tier && guessOf(tier)) {
+      var back = el("button", "inline", "So với dự đoán của bạn");
+      back.type = "button";
+      back.addEventListener("click", function () { selected = null; mark(); intro(); });
+      c.appendChild(el("p", "", "")).appendChild(back);
+    }
+    var rf = (n.figures || []).filter(function (r) {  // đang tự đoán: hình "ở tầng dưới" kèm nhãn ô con, chưa hiện
+      return fig(r.id) && !(predicting && r.why === "child" && !guessOf(id));
+    });
     if (rf.length) {
       c.appendChild(el("h3", "", "Hình, bảng liên quan"));
       rf.forEach(function (r) {
@@ -537,6 +689,18 @@
     figsBtn.hidden = false;
     figsBtn.addEventListener("click", gallery);
   }
+  var predictBtn = document.getElementById("predict");
+  function setPredict(on) {
+    predicting = !!on;
+    predictBtn.setAttribute("aria-pressed", predicting ? "true" : "false");
+    predictBtn.textContent = "Tự đoán trước: " + (predicting ? "bật" : "tắt");
+    save("paper-graph:predict-mode", predicting);
+  }
+  setPredict(load("paper-graph:predict-mode", false) === true);
+  predictBtn.addEventListener("click", function () {
+    setPredict(!predicting);
+    if (selected !== null) card(selected); else intro();
+  });
   document.getElementById("relayout").addEventListener("click", function () {
     if (D.edit) api("/api/move", { tier: tier, reset: true });
   });
@@ -551,6 +715,8 @@
   });
   document.addEventListener("keydown", function (ev) {
     if (zoomBox.open) return;  // Escape lúc xem hình to chỉ đóng hình (trình duyệt tự đóng dialog)
+    var t = ev.target && ev.target.tagName;
+    if (t === "TEXTAREA" || t === "INPUT") return;  // đang gõ (dự đoán, sửa chữ): Escape không lùi tầng, không mất chữ
     if (ev.key === "Escape" && tier) { var up = (node(tier) || {}).parent || ""; go(up, tier, true); }
   });
   go("", null, false);

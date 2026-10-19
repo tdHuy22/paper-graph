@@ -4,7 +4,7 @@ Mô tả sản phẩm ở [README.md](README.md); file này chỉ ghi trạng th
 
 ## §0 Đang ở đâu, việc tiếp theo
 
-Cập nhật 2026-10-16.
+Cập nhật 2026-10-19.
 
 ### Đã xong, có bằng chứng
 
@@ -183,16 +183,68 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   dời, định dạng chung `format_graph` và lệnh `fmt` (skill chạy trước `check`), in cổng có flush); 6 đột biến bản sửa
   đều làm đỏ; 27 test `test_serve.py`; cả bộ test đạt hai Python (biên nhận); thử lại trong trình duyệt.
 
+- **Mốc 4 bước 5: dựng sơ đồ qua API** (2026-10-16, xong; chưa commit, chờ bạn bảo; mục 0 của "Việc tiếp theo" có số
+  đo model free).
+  `python -m paper_graph build bai.blocks.json` (`paper_graph/build.py`): chỉ dẫn lấy từ skill dung-so-do (mục đích,
+  lập bản đồ, cách viết, mẫu, thể loại, định dạng, sơ đồ mẫu), toàn văn bài, OpenRouter; vòng dựng → `check` → gửi lỗi
+  lại, mặc định 3 lượt sửa, trần 0,5 USD mỗi lần chạy; đạt thì `graph.json`, chưa thì `graph.draft.json`. Threat
+  model TM-21..TM-25 (lộ khoá, tiền, output model, ghi đè, dữ liệu bài). Khoá OpenRouter của bạn ở
+  `~/.config/paper-graph/openrouter.key` (600, ngoài repo; trần của khoá 3 USD). Test `tests/test_build.py` (11, API
+  giả). Chạy thật Attention bằng Haiku 5.5: 3 lượt, 0,034 USD, 0 lỗi; điểm không tính vì sơ đồ mẫu trong chỉ dẫn là
+  chính bài đó. Haiku 5.5 trên BERT, DataSentinel, RoFormer, RAG: cả 4 qua check, tổng 0,088 USD, nhưng mỏng (12–22
+  ô; phủ 10/10, 10/13, 10/14, 9/14). DeepSeek V4 Pro (RoFormer, RAG): sâu hơn (25–30 ô, RAG phủ 14/14) nhưng không
+  hội tụ trong 4 lượt. Reviewer opus: 4 vừa, 4 thấp, sửa cả 8 (ô khoá chép nguyên khi `--force`, khoá nhiều dòng lọt
+  traceback, lỗi giữa vòng mất bản đã trả tiền, giá -1 vô hiệu trần tiền, hết giờ chờ tính tiền, không theo
+  redirect, sơ đồ đổi giữa chừng chỉ ghi nháp, in lý do dừng và ghi `graph.draft.txt`); vòng sửa giờ sửa từ bản tốt
+  nhất, chỉ gửi bản đó cùng lỗi của nó; TM-21..25 `đã có`; 18 test, cả bộ đạt (biên nhận). Đang đo lại DeepSeek
+  (`.tmp/build/dsv4pro2/`): vòng sửa mới hội tụ, RoFormer 4 lượt 0,137 USD (phủ 12/14, đúng tầng 86%, quan hệ 100%,
+  soi 3/4), RAG 3 lượt 0,178 USD (phủ 14/14, tầng 100%, quan hệ 100%, soi 1/4). Model mặc định đổi sang
+  `deepseek/deepseek-v4-pro`, sau đó đổi tiếp sang Nemotron free (mục 0 dưới). Tiền đã tiêu khoảng 0,8 USD/3 USD.
+
+- **Mốc 5 việc 6.1: tự đoán trước rồi mở** (2026-10-18, xong, chưa commit). Nút "Tự đoán trước" trong trình xem
+  (`viewer.js` `askGuess`, `compare`): mở ô có tầng dưới thì hỏi dự đoán (ít nhất 10 ký tự, có nút bỏ qua), rồi đặt
+  dự đoán cạnh các ô thật, người đọc tick ý trúng, hiện "Trúng k/N"; lưu localStorage theo SHA-256 bài; hình "ở tầng
+  dưới" (lộ nhãn ô con) ẩn tới khi đã đoán. Thử trong trình duyệt trên RAG: hỏi, chặn trống, mở và so, tick 2/9, tải
+  lại vẫn nhớ, console sạch. Không ranh giới mới (chữ người đọc ở lại trình duyệt, vào trang bằng `textContent`).
+
+- **Mốc 5 việc 6.2: đo hiểu bài** (2026-10-18, xong phần chuẩn bị, chưa commit). `paper_graph/quiz.py` (định dạng
+  `<tên>.quiz.json`, bộ kiểm dùng `AnchorChecker`, trang làm bài `viewer/quiz.{html,js,css}`: hỏi cách đọc, đo giờ, có
+  "Không biết", chấm ngay kèm câu trích, dòng kết quả JSON), lệnh `quiz`. Hai bộ 6 câu: Attention, RAG (12 câu trích
+  có thật). Quy trình đổi chéo `docs/do-hieu-bai.md`. Test `tests/test_quiz.py` (8 sau review). Thử trong trình duyệt: chặn chưa
+  chọn cách đọc, chặn câu bỏ trống, chấm, dòng kết quả, console sạch. Skill dung-so-do cấm đọc `*.quiz.json`. Reviewer
+  sonnet: 3 vừa, 4 thấp, sửa cả 7 (thư viện hình lộ ô tầng chưa đoán; 11/12 đáp án là phương án dài nhất → viết lại
+  phương án nhiễu, còn 4/12, thêm cảnh báo PG231; `kind` kiểu lạ văng traceback; localStorage lỗi mất dự đoán → bản
+  trong bộ nhớ và thông báo; cổng hỏi dùng `guessOf`; Escape trong ô nhập không lùi tầng; "Đoán lại" giữ bản cũ, nút
+  "So với dự đoán của bạn" ở thẻ ô con, aria, tương phản nút tối). Cả bộ test đạt (biên nhận); thử lại thư viện hình
+  trong trình duyệt. Còn `@ban`: mời người đọc chạy phép đo. Chưa commit (cùng lệnh `build`).
+
 ### Việc tiếp theo
 
 Bạn chốt 2026-10-16 (trang https://claude.ai/artifact/JbS5XBzaztdKAdDWLL2AMu): tích hợp đầy đủ vào VietPaper, VietPaper
 dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa VietPaper xong mới đụng repo đó; làm bước 5 (dựng sơ
 đồ qua API) sớm, trong paper-graph, bằng key OpenRouter của bạn (lưu ngoài repo).
 
-1. Bước 5 trong paper-graph: threat model (gọi dịch vụ ngoài, khoá API, output của model), lệnh dựng sơ đồ qua
-   OpenRouter với vòng dựng → `check` → sửa, trần lượt và trần tiền; đo trên bộ đo.
+0. Model miễn phí (2026-10-16): bạn đã bật "Free model training" trên OpenRouter và đồng ý; đã thêm cờ
+   `--allow-training` (chỉ nhận model `:free`, gửi `data_collection: allow`, in cảnh báo; mặc định vẫn deny), test
+   `test_allow_training_only_for_free_models`; TM-25 và README ghi ngoại lệ. Nemotron 3 Ultra 550B free: nhà cung
+   cấp trả 504 (hết giờ) nằm trong thân phản hồi 200 ở cả hai bài; `build` giờ coi lỗi trong thân là lỗi API và thử
+   lại (test `test_error_inside_a_200_reply_is_an_api_error`, 20 test đạt). `nvidia/nemotron-3.5-super-vl:free`
+   (0 USD): RoFormer 3 lượt, RAG 4 lượt, cả hai 0 lỗi; phủ 13/14 và 12/14, đúng tầng 79% và 86%, quan hệ 50% và 80%,
+   soi 1/4 và 0/4 (DeepSeek V4 Pro: 12/14 và 14/14, quan hệ 100%, soi 3/4 và 1/4). Model mặc định của `build` đổi sang
+   Nemotron free; model `:free` mà thiếu `--allow-training` thì dừng, báo rõ. Cả bộ test đạt (biên nhận). Chưa commit.
+   2026-10-17: DataSentinel free 1 lượt, 0 lỗi, phủ 10/13 (77%, dưới ngưỡng). BERT dừng lượt 3 vì OpenRouter trả trang
+   không phải JSON; `_retryable` giờ thử lại lỗi đó (test đạt). BERT chạy lại: 2 lượt, đạt. Tổng kết model free (0 USD): đạt ngưỡng 3/4
+   bài (BERT 8/10, RoFormer 13/14, RAG 12/14; DataSentinel 10/13 trượt), quan hệ 50–80%, soi yếu (0–1). Việc 5.3 tick.
+   Lệnh `build` chưa commit (chờ bạn). VietPaper: phiên kia vẫn còn sửa chưa commit (`app.py`, `agent.py`), tiếp tục chờ.
+1. Commit lệnh `build` và Mốc 5 khi bạn bảo (19 file chưa commit; chỉ `git add` đúng file, không kèm
+   `.claude/launch.json`). Lần chạy gần nhất 2026-10-19: 221 test đạt (biên nhận). Có thể đo DeepSeek thêm BERT, DataSentinel
+   (khoảng 0,3 USD) để đủ 4 bài. Nên đổi khoá OpenRouter sau đợt này (khoá đã nằm trong lịch sử hội thoại).
 2. Khi phiên kia commit xong VietPaper: bước 1 (nối thư viện, xuất `blocks.json` từ `state.json`), 2 (tab xem, cuộn
    hai khung), 3 (bản dịch câu trích), 4 (sửa, khoá, kéo trong VietPaper), rồi nút "Dựng sơ đồ" gọi bước 5.
+   Kiểm 2026-10-19: `../pdf-translator` vẫn còn sửa chưa commit (`agent.py`, `scripts/smoke_features.py`,
+   threat-model, `.agent/HANDOFF.md`); commit gần nhất `7907b1b`. Tiếp tục chờ.
+3. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban); trước đó dựng và khoá sơ đồ RAG trong
+   `papers/rag/`.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -262,9 +314,11 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 
 - [ ] Tab "Sơ đồ" cạnh bản dịch; bấm ô thì cuộn hai khung tới đúng đoạn.
 - [ ] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper).
-- [ ] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code.
+- [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
+  model local chưa làm)
 
 ### Mốc 5: học bằng cách dựng
 
-- [ ] Chế độ "đoán trước rồi mở": ẩn tầng dưới, người đọc ghi dự đoán, rồi so.
-- [ ] Đo hiểu bài: vài câu hỏi mỗi bài, so đọc chữ với đọc qua sơ đồ.
+- [x] Chế độ "đoán trước rồi mở": ẩn tầng dưới, người đọc ghi dự đoán, rồi so.
+- [x] Đo hiểu bài: vài câu hỏi mỗi bài, so đọc chữ với đọc qua sơ đồ. (công cụ, câu hỏi, quy trình)
+- [ ] Chạy phép đo với người đọc thật theo `docs/do-hieu-bai.md`, ghi kết quả @ban

@@ -1,0 +1,124 @@
+{
+ "version": 1,
+ "paper": {
+  "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+  "sha256": "23e3249e9a1e75418d82efecab0ea8c4d033b89c93742f63208d47ce01f21233",
+  "blocks": "rag.blocks.json"
+ },
+ "questions": [
+  {
+   "id": "q1",
+   "kind": "big",
+   "q": "RAG kết hợp hai loại \"bộ nhớ\" nào?",
+   "choices": [
+    "Hai mô hình seq2seq học trên hai tập dữ liệu khác nhau",
+    "Một mô hình seq2seq đã học trước và một chỉ mục vector của Wikipedia",
+    "Một cơ sở dữ liệu tri thức có cấu trúc và một mô hình ngôn ngữ",
+    "Bộ nhớ ngắn hạn và bộ nhớ dài hạn trong cùng một mạng hồi quy"
+   ],
+   "answer": 1,
+   "explain": "Bộ nhớ tham số là BART; bộ nhớ ngoài là chỉ mục Wikipedia tra bằng bộ tra dày đặc.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "the non-parametric memory is a dense vector index of Wikipedia"
+    }
+   ]
+  },
+  {
+   "id": "q2",
+   "kind": "mechanism",
+   "q": "RAG-Token khác RAG-Sequence ở chỗ nào?",
+   "choices": [
+    "RAG-Token tra nhiều đoạn hơn cho mỗi câu hỏi",
+    "RAG-Token bỏ bộ tra, chỉ dùng bộ sinh BART",
+    "Mỗi từ sinh ra có thể dựa vào một đoạn khác nhau",
+    "RAG-Token chỉ dùng được cho hỏi đáp, không sinh câu"
+   ],
+   "answer": 2,
+   "explain": "RAG-Sequence dùng cùng các đoạn cho cả câu; RAG-Token gộp qua các đoạn ở từng từ.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "another which can use different passages per token"
+    }
+   ]
+  },
+  {
+   "id": "q3",
+   "kind": "mechanism",
+   "q": "Khi tinh chỉnh, phần nào của RAG được giữ nguyên?",
+   "choices": [
+    "Bộ mã hoá tài liệu và chỉ mục",
+    "Bộ sinh BART và bộ mã hoá câu hỏi",
+    "Bộ mã hoá câu hỏi và chỉ mục",
+    "Không phần nào, học tất cả cùng lúc"
+   ],
+   "answer": 0,
+   "explain": "Cập nhật bộ mã hoá tài liệu phải dựng lại chỉ mục, rất tốn; bài thấy không cần bước đó.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "keep the document encoder (and index) fixed"
+    }
+   ]
+  },
+  {
+   "id": "q4",
+   "kind": "evidence",
+   "q": "Trên hỏi đáp mở, bài tuyên bố kết quả gì?",
+   "choices": [
+    "Ngang các mô hình chỉ có tham số trên cả bốn tập",
+    "Đạt mức tốt nhất trên ba tập hỏi đáp mở",
+    "Đạt mức tốt nhất trên mọi tập được đánh giá",
+    "Kém hơn một chút nhưng giải thích được câu trả lời"
+   ],
+   "answer": 1,
+   "explain": "Tuyên bố ở tóm tắt là mức tốt nhất trên ba tập hỏi đáp mở, không phải mọi tập.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "set the state of the art on three open domain QA tasks"
+    }
+   ]
+  },
+  {
+   "id": "q5",
+   "kind": "big",
+   "q": "Lợi thế của bộ nhớ ngoài mà bài minh hoạ bằng việc thay chỉ mục Wikipedia 2016 bằng 2018 là gì?",
+   "choices": [
+    "Sinh câu nhanh hơn vì không phải chạy hết mô hình",
+    "Cập nhật kiến thức lúc dùng mà không phải học lại",
+    "Giảm số tham số cần thiết của bộ sinh BART",
+    "Tăng điểm BLEU trên các câu hỏi về người nổi tiếng"
+   ],
+   "answer": 1,
+   "explain": "Mô hình chỉ có tham số phải học lại khi thế giới đổi; RAG chỉ cần đổi chỉ mục.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "knowledge can be easily updated at test time"
+    }
+   ]
+  },
+  {
+   "id": "q6",
+   "kind": "evidence",
+   "q": "Với các việc sinh văn bản, bài thấy RAG khác mô hình chỉ có tham số thế nào?",
+   "choices": [
+    "Câu ngắn hơn, an toàn hơn và ít lặp từ hơn",
+    "Không khác đáng kể theo người chấm đánh giá",
+    "Câu cụ thể hơn, đa dạng hơn và đúng sự thật hơn",
+    "Câu trôi chảy hơn nhưng hay bịa thông tin hơn"
+   ],
+   "answer": 2,
+   "explain": "So với BART không có bộ nhớ ngoài.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "generate more specific, diverse and factual language"
+    }
+   ]
+  }
+ ]
+}
