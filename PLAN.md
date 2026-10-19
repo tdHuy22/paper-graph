@@ -183,7 +183,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   dời, định dạng chung `format_graph` và lệnh `fmt` (skill chạy trước `check`), in cổng có flush); 6 đột biến bản sửa
   đều làm đỏ; 27 test `test_serve.py`; cả bộ test đạt hai Python (biên nhận); thử lại trong trình duyệt.
 
-- **Mốc 4 bước 5: dựng sơ đồ qua API** (2026-10-16, xong; chưa commit, chờ bạn bảo; mục 0 của "Việc tiếp theo" có số
+- **Mốc 4 bước 5: dựng sơ đồ qua API** (2026-10-16, xong; commit `0992182`; mục 0 của "Việc tiếp theo" có số
   đo model free).
   `python -m paper_graph build bai.blocks.json` (`paper_graph/build.py`): chỉ dẫn lấy từ skill dung-so-do (mục đích,
   lập bản đồ, cách viết, mẫu, thể loại, định dạng, sơ đồ mẫu), toàn văn bài, OpenRouter; vòng dựng → `check` → gửi lỗi
@@ -201,7 +201,7 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json --stric
   soi 3/4), RAG 3 lượt 0,178 USD (phủ 14/14, tầng 100%, quan hệ 100%, soi 1/4). Model mặc định đổi sang
   `deepseek/deepseek-v4-pro`, sau đó đổi tiếp sang Nemotron free (mục 0 dưới). Tiền đã tiêu khoảng 0,8 USD/3 USD.
 
-- **Mốc 5 việc 6.1: tự đoán trước rồi mở** (2026-10-18, xong, chưa commit). Nút "Tự đoán trước" trong trình xem
+- **Mốc 5 việc 6.1: tự đoán trước rồi mở** (2026-10-18, xong, commit `0992182`). Nút "Tự đoán trước" trong trình xem
   (`viewer.js` `askGuess`, `compare`): mở ô có tầng dưới thì hỏi dự đoán (ít nhất 10 ký tự, có nút bỏ qua), rồi đặt
   dự đoán cạnh các ô thật, người đọc tick ý trúng, hiện "Trúng k/N"; lưu localStorage theo SHA-256 bài; hình "ở tầng
   dưới" (lộ nhãn ô con) ẩn tới khi đã đoán. Thử trong trình duyệt trên RAG: hỏi, chặn trống, mở và so, tick 2/9, tải
@@ -236,9 +236,9 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    không phải JSON; `_retryable` giờ thử lại lỗi đó (test đạt). BERT chạy lại: 2 lượt, đạt. Tổng kết model free (0 USD): đạt ngưỡng 3/4
    bài (BERT 8/10, RoFormer 13/14, RAG 12/14; DataSentinel 10/13 trượt), quan hệ 50–80%, soi yếu (0–1). Việc 5.3 tick.
    Lệnh `build` chưa commit (chờ bạn). VietPaper: phiên kia vẫn còn sửa chưa commit (`app.py`, `agent.py`), tiếp tục chờ.
-1. Commit lệnh `build` và Mốc 5 khi bạn bảo (19 file chưa commit; chỉ `git add` đúng file, không kèm
-   `.claude/launch.json`). Lần chạy gần nhất 2026-10-19: 221 test đạt (biên nhận). Có thể đo DeepSeek thêm BERT, DataSentinel
-   (khoảng 0,3 USD) để đủ 4 bài. Nên đổi khoá OpenRouter sau đợt này (khoá đã nằm trong lịch sử hội thoại).
+1. Lệnh `build` và Mốc 5 đã commit `0992182` (2026-10-19, bạn bảo "làm tiếp"; 221 test đạt, biên nhận;
+   `.claude/launch.json` vẫn không commit). Còn tuỳ chọn: đo DeepSeek thêm BERT, DataSentinel (khoảng 0,3 USD) để đủ
+   4 bài. Nên đổi khoá OpenRouter (khoá đã nằm trong lịch sử hội thoại; @ban).
 2. Khi phiên kia commit xong VietPaper: bước 1 (nối thư viện, xuất `blocks.json` từ `state.json`), 2 (tab xem, cuộn
    hai khung), 3 (bản dịch câu trích), 4 (sửa, khoá, kéo trong VietPaper), rồi nút "Dựng sơ đồ" gọi bước 5.
    Kiểm 2026-10-19: `../pdf-translator` vẫn còn sửa chưa commit (`agent.py`, `scripts/smoke_features.py`,
