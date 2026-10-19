@@ -278,6 +278,15 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    "Quyết định đã chốt").
 6. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban): đủ đồ cho cả hai bài (sơ đồ đã khoá, 12
    câu mỗi bài).
+7. **Phép đo thay bằng model (2026-10-19, bạn bảo "làm 6.1 và bạn tự chấm"): không thay được người đọc.** 6 agent
+   Sonnet mới, mỗi agent một điều kiện: không đọc / chỉ đọc chữ (`read`) / chỉ đọc `graph.json`, trên Attention và RAG,
+   câu hỏi bỏ đáp án, có "Không biết", dặn chỉ dựa vào tài liệu. Kết quả: không đọc 12/12 cả hai bài, đọc chữ 12/12 cả
+   hai, đọc sơ đồ RAG 12/12, Attention 9/12 (q6, q10, q12 chọn "Không biết": sơ đồ không có thời gian huấn luyện bản
+   lớn, thí nghiệm đổi số đầu, so mã vị trí sin với mã học). Mọi id ô được trích đều có thật. Model đã thuộc cả hai
+   bài nên phép đo này không đo được hiểu bài; chỉ cho biết độ đủ thông tin của sơ đồ: RAG đủ cho 12/12 câu, Attention
+   thiếu 3 câu `evidence`/`limit`. Đừng thêm ô vào sơ đồ Attention theo ba câu này trước khi đo người thật (sơ đồ sẽ
+   bị chỉnh theo đề). Chi tiết: `docs/do-hieu-bai.md` mục "Phép đo thay bằng model"; câu trả lời và script chấm ở
+   `.tmp/do-hieu-bai/2026-10-19-model/`. Việc 6.1 vẫn mở (@ban).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 

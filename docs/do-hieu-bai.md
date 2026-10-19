@@ -58,3 +58,27 @@ python3 -m paper_graph view papers/rag/rag.graph.json --pdf ../pdf-translator/da
 - q1–q6 do người dựng công cụ soạn, có thể vô tình hợp với cách sơ đồ trình bày; q7–q12 soạn không nhìn sơ đồ nhưng
   vẫn do model soạn. Nên nhờ người khác soạn thêm.
 - Đây không phải nghiên cứu có kiểm soát: không giấu được người đọc đang ở điều kiện nào.
+
+## Phép đo thay bằng model (2026-10-19)
+
+Chạy khi chưa có người đọc, để xem model có làm người đọc thay được không. Kết luận: không, vì model đã thuộc bài.
+
+- 6 agent Sonnet 5.5, context mới, mỗi agent một điều kiện cho một bài: không đọc gì (hiểu biết sẵn có), chỉ đọc chữ
+  (đầu ra `read`), chỉ đọc `graph.json` (những gì trình xem hiện khi bấm ô). Câu hỏi bỏ đáp án, thêm "Không biết";
+  hai điều kiện có tài liệu được dặn chỉ dựa vào tài liệu, không đủ thì chọn "Không biết". Câu trả lời và script chấm:
+  `.tmp/do-hieu-bai/2026-10-19-model/` (không có trong git).
+
+| Bài | Không đọc | Đọc chữ | Đọc sơ đồ |
+|---|---|---|---|
+| Attention | 12/12 | 12/12 | 9/12, 3 "Không biết" (q6, q10, q12) |
+| RAG | 12/12 | 12/12 | 12/12 |
+
+- Không đọc mà vẫn 12/12 ở cả hai bài: hai bài này nằm trong dữ liệu huấn luyện của model, nên điểm không nói gì về
+  việc sơ đồ giúp hiểu. Muốn đo bằng model thì cần bài ra sau mốc dữ liệu của model, và điều kiện "không đọc" phải ra
+  điểm thấp trước đã.
+- Điều đo được là độ đủ thông tin: agent đọc sơ đồ trích id ô cho mỗi câu (mọi id đều có thật) và chọn "Không biết"
+  khi sơ đồ không nói, dù nó biết đáp án. Sơ đồ RAG (50 ô) đủ cho cả 12 câu, q7 phải suy từ hai ô. Sơ đồ Attention
+  (21 ô, dựng tay) thiếu 3 câu: thời gian huấn luyện bản lớn (q6, `evidence`), thí nghiệm đổi số đầu attention (q10,
+  `evidence`), so mã vị trí hình sin với mã học được (q12, `limit`). Người đọc qua sơ đồ Attention chỉ trả lời được
+  ba câu này nếu mở câu trích hay đã biết từ trước.
+- Không sửa sơ đồ Attention theo ba câu này trước khi đo người thật: sơ đồ chỉnh theo đề thì phép đo hết công bằng.
