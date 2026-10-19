@@ -6,8 +6,8 @@ Bộ đo của `bench/` chấm sơ đồ so với đáp án; nó không nói ng�
 ## Công cụ
 
 ```bash
-python3 -m paper_graph quiz bench/papers/rag/rag.quiz.json -o rag.quiz.html   # kiểm câu hỏi, xuất trang làm bài
-python3 -m paper_graph view papers/rag/rag.graph.json -o rag.html            # sơ đồ cho nhóm đọc qua sơ đồ
+python3 -m paper_graph quiz bench/papers/rag/rag.quiz.json --blocks papers/rag/rag.blocks.json -o papers/rag/rag.quiz.html
+python3 -m paper_graph view papers/rag/rag.graph.json --pdf ../pdf-translator/data/rag.pdf -o papers/rag/rag.html
 ```
 
 - `<tên>.quiz.json`: 3–12 câu trắc nghiệm, mỗi câu 3–5 phương án, một đáp án, giải thích, và câu trích nguyên văn
@@ -17,8 +17,10 @@ python3 -m paper_graph view papers/rag/rag.graph.json -o rag.html            # s
   (để đoán bừa không làm nhiễu điểm), chấm ngay, hiện đáp án kèm câu trích, và cho một dòng kết quả JSON để chép lại.
 - Đáp án nằm trong trang (đây là bài tự kiểm): người đọc phải tự giác không xem mã trang.
 - Có sẵn: `bench/papers/attention/attention.quiz.json`, `bench/papers/rag/rag.quiz.json` (6 câu mỗi bài). Sơ đồ: Attention
-  có sẵn `bench/papers/attention/attention.graph.json`; RAG thì dựng trước (skill dung-so-do hay `build`) vào
-  `papers/rag/`, duyệt và khoá ô rồi mới dùng để đo.
+  có sẵn `bench/papers/attention/attention.graph.json`; RAG ở `papers/rag/rag.graph.json`: skill dung-so-do
+  dựng (lượt đo 7, trước khi có bộ câu hỏi), một agent không đọc câu hỏi soát 50 ô với nguyên văn, sửa 28 ô, cả 50 ô
+  đã khoá (2026-10-19). Hai trang HTML nhúng chữ và ảnh của bài nên không đưa vào git; tạo lại bằng hai lệnh trên
+  (`rag.blocks.json` lấy từ `bench/prepare.py`).
 - Bộ kiểm cảnh báo PG231 khi đáp án đúng là phương án dài nhất ở quá nửa số câu: viết phương án nhiễu dài và cụ thể
   ngang đáp án.
 

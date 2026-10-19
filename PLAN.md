@@ -243,7 +243,15 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    hai khung), 3 (bản dịch câu trích), 4 (sửa, khoá, kéo trong VietPaper), rồi nút "Dựng sơ đồ" gọi bước 5.
    Kiểm 2026-10-19: `../pdf-translator` vẫn còn sửa chưa commit (`agent.py`, `scripts/smoke_features.py`,
    threat-model, `.agent/HANDOFF.md`); commit gần nhất `7907b1b`. Tiếp tục chờ.
-3. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban); trước đó dựng và khoá sơ đồ RAG trong
+3. **Sơ đồ RAG cho phép đo: xong, đã commit** (2026-10-19). `papers/rag/rag.graph.json` chép từ `iteration-7/rag`
+   (dựng trước khi có bộ câu hỏi). Agent soát (Opus, không đọc quiz/gold) soát 50 ô, 33 cạnh: 1 ô sai một phần
+   (`why`: BM25 tốt nhất ở FEVER), 8 dễ hiểu lầm, 19 chữ/thuật ngữ; mình kiểm nguyên văn rồi sửa cả 28
+   (`.tmp/rag_edits.py`); soát lại lượt 2 thêm 1 chỗ (`q.c_params` ghi "Người dựng lưu ý"). Cả 50 ô `locked`;
+   `check --pdf --strict` 0 lỗi 0 cảnh báo, 93/93 neo; `score` 14/14, tầng 100%, quan hệ 100%, soi 4/4. Xuất
+   `papers/rag/rag.html` (2,5 MB) và `rag.quiz.html`, `.gitignore` thêm `papers/**/*.html`; thử trong trình duyệt:
+   tầng dưới, thẻ ô "đã khoá", trang làm bài, console sạch. `docs/do-hieu-bai.md` ghi lệnh xuất. Cấu hình
+   `papers-rag` thêm vào `.claude/launch.json` (không commit).
+4. Mời người đọc thật chạy phép đo hiểu bài (`docs/do-hieu-bai.md`, @ban); trước đó dựng và khoá sơ đồ RAG trong
    `papers/rag/`.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)

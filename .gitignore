@@ -10,3 +10,5 @@ __pycache__/
 *.graph.old.json
 # ảnh cắt từ bài bằng `paper_graph figure`: tạo lại được, và là nội dung của bài
 *.figures/
+# trang xuất từ sơ đồ (nhúng ảnh, chữ của bài): tạo lại bằng `view`, `quiz`
+papers/**/*.html
