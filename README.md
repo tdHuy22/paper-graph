@@ -60,8 +60,14 @@ chỗ khác (bàn phím: Alt + mũi tên), "Dàn lại tầng này". Nội dung 
 dùng toạ độ này. Sơ đồ trên đĩa đổi trong lúc trang đang mở (ví dụ vừa dựng lại) thì trang báo tải lại, không ghi đè.
 
 Dựng sơ đồ không cần Claude Code: `build` gửi chữ bài và chỉ dẫn (lấy từ skill dung-so-do) tới một model qua
-OpenRouter, chạy `check`, gửi lỗi lại cho model sửa, tối đa `--rounds` lượt (mặc định 3) và `--max-usd` (mặc định
-0,5 USD). Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`; câu trả lời
+OpenRouter, chạy `check`, gửi lỗi lại cho model sửa. Mặc định (`--mode tiers`) dựng từng tầng một: lượt đầu xin tầng
+đầu, mỗi ô model đánh dấu cần mở có một lượt riêng xin tầng dưới của nó (tới độ sâu 3), mỗi phần được kiểm và sửa
+riêng tối đa `--rounds` lượt (mặc định 3), phần còn lỗi thì bỏ để phần đã đạt không bị kéo theo; cuối cùng một lượt
+soát thêm ô cho tuyên bố thiếu bằng chứng (PG305) và bảng không ô nào nói tới (PG309). Chương trình tự đặt `parent`
+của mỗi phần và bỏ ô trùng id, nên một lượt không ghi được ra ngoài nhánh của nó. Trần số lượt gọi cả lần chạy
+`--max-calls` (mặc định 16, kể cả thử lại; model miễn phí của OpenRouter cho 50 lượt mỗi ngày khi tổng tín dụng đã nạp
+dưới 9 USD). `--mode one-shot` là cách cũ (cả sơ đồ trong một câu trả lời), giữ để so. Trần tiền `--max-usd` (mặc định
+0,5 USD) tính cho cả lần chạy. Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`; câu trả lời
 không đọc được thành sơ đồ (bị cắt, không phải JSON) vẫn ghi ra `bai.graph.raw.txt`. Trước mỗi lượt lệnh in mức tiền
 ước tối đa (tính cả token suy luận, tối đa 8.000; chữ tiếng Việt khoảng 1,7 ký tự mỗi token): model đắt như Opus cần
 nâng `--max-usd`, khoảng 1 USD mỗi lượt với một bài 20 trang. Khoá lấy từ biến

@@ -207,3 +207,34 @@ luận) rằng "4,3%" của FEVER là chênh điểm chứ không phải phần 
 đáp án gốc thì 3/4 điểm soi, phần trượt do điểm soi). Một bài, hai lượt là ít; đây là bằng chứng skill tổng quát được,
 chưa phải số đo chính xác.
 
+
+## `build` dựng theo tầng so với một lượt (2026-10-20)
+
+Cùng ngày, cùng model (`nvidia/nemotron-3.5-super-vl:free`, 0 USD), mỗi bài một lần chạy mỗi cách, bản chỉ dẫn sau khi
+SKILL.md sửa ngày 20/10. Tiers: `--max-calls 12`, `--rounds 3` cho mỗi phần. Sơ đồ và log ở `.tmp/build/2026-10-20/`
+(không có trong git). Đủ thông tin: một agent Sonnet chỉ đọc sơ đồ làm 12 câu của `prism.quiz.json`, như
+docs/do-hieu-bai.md (câu trả lời ở `.tmp/do-hieu-bai/2026-10-20-build/`).
+
+| Bài · cách | Lượt | Ô (ô có con) | Phủ | Đúng tầng | Quan hệ | Soi | Đủ thông tin |
+|---|---|---|---|---|---|---|---|
+| RAG · tiers | 7 | 24 (2) | 14/14 | 100% | 100% | 0/4 | |
+| RAG · một lượt | 4 | 21 (2) | 12/14 | 86% | 100% | 0/4 | |
+| DataSentinel · tiers | 10, chạm trần trước lượt soát | 24 (3) | 13/13 | 100% | 80% | 1/2 | |
+| DataSentinel · một lượt | 4 | 20 (3) | 11/13 | 85% | 60% | 1/2 | |
+| Prism · tiers | 9 | 21 (3) | 11/13 | 85% | 83% | 0/3 | 5/12 |
+| Prism · một lượt | 4 | 26 (4) | 13/13 | 92% | 100% | 0/3 | 6/12 |
+
+So: skill trong Claude Code trên Prism (lượt 8) ra 48 ô, phủ 13/13, đủ thông tin 11/12.
+
+- Tiêu chí đặt trước khi đo (trang kế hoạch, câu 4): độ phủ không thấp hơn cách cũ ở bài nào, đạt 80% ở cả 3 bài,
+  và hơn ở độ phủ hay điểm soi trên ít nhất 2 bài. Tiers hơn ở RAG và DataSentinel nhưng thua ở Prism (11/13 so với
+  13/13): **chưa đạt**. Mỗi ô của bảng là một lần chạy; một lần chạy lại của cùng model từng đổi 29 ô thành 18 (BERT,
+  17/10), nên chênh 2 ý là trong mức dao động.
+- Giả thuyết của kế hoạch là sơ đồ mỏng vì một câu trả lời phải chứa cả sơ đồ. Đo được: tiers không làm sơ đồ dày
+  hơn (21–24 ô, gần bằng một lượt), vì model chỉ đánh dấu 2–3 ô tầng đầu cần mở (`method`, `result`, có khi `limit`) và
+  không mở tiếp ô con nào. Chỗ nghẽn là việc model chọn ít ô để mở, không phải độ dài câu trả lời.
+- Lượt soát thêm được 1 ô mỗi bài, bỏ 1 phần thêm còn lỗi; PG309 vẫn còn 2–4 cảnh báo mỗi sơ đồ tiers (bảng, hình
+  ở phần chính như Hình 3 của RAG, Hình 6 và 8 của Prism). Sơ đồ một lượt không có cảnh báo PG309 nào.
+- Cả hai cách bằng model free đều chỉ đủ cho khoảng nửa số câu (5–6 trên 12) trên Prism, so với 11 của skill.
+- Cái tiers chắc chắn được: mỗi câu trả lời nhỏ (lớn nhất 10 ô), phần hỏng chỉ làm lại phần đó (khung RAG sửa 1 lượt,
+  nhánh `result` 12 lỗi sửa 1 lượt), không bị cắt. Đổi lại tốn 7–12 lượt mỗi bài thay vì 4.

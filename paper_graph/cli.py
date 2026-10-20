@@ -248,18 +248,21 @@ def cmd_build(a) -> int:
         raise InputError("--rounds phải trong khoảng 0–6")
     if not 0 < a.max_usd <= 5:
         raise InputError("--max-usd phải trong khoảng (0, 5]")
+    if not 1 <= a.max_calls <= 40:
+        raise InputError("--max-calls phải trong khoảng 1–40")
     if a.model.endswith(":free") and not a.allow_training:
         raise InputError(f"{a.model} là model miễn phí: OpenRouter chỉ chạy khi cho nhà cung cấp huấn luyện trên chữ bài. "
                          "Bài đã công khai thì thêm --allow-training (và bật \"Free model training\" ở "
-                         "openrouter.ai/settings/privacy); bài riêng tư thì dùng --model deepseek/deepseek-v4-pro hay skill")
+                         "openrouter.ai/settings/privacy); bài riêng tư thì dựng bằng skill trong Claude Code")
     if a.allow_training:
         print(f"CẢNH BÁO: chữ của bài gửi tới OpenRouter ({safe(a.model, 100)}) với data_collection: allow — nhà "
               "cung cấp model miễn phí được lưu và dùng nó để huấn luyện. Chỉ dùng cho bài đã công khai.", flush=True)
     else:
         print(f"Chữ của bài sẽ gửi tới OpenRouter ({safe(a.model, 100)}), nhà cung cấp không lưu, không huấn luyện "
               "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model local.", flush=True)
+    extra = {"max_calls": a.max_calls} if a.mode == "tiers" else {}
     res, path = build(Path(a.blocks), a.model, a.rounds, a.max_usd, force=a.force, allow_training=a.allow_training,
-                      say=lambda m: print(safe(m, 500), flush=True))
+                      say=lambda m: print(safe(m, 500), flush=True), mode=a.mode, **extra)
     print(f"{res.rounds} lượt, {res.cost:.4f} USD")
     if res.graph is None:
         print("Không có sơ đồ nào đọc được"
@@ -363,9 +366,14 @@ def main(argv=None) -> int:
                                      "~/.config/paper-graph/openrouter.key)")
     u.add_argument("blocks")
     u.add_argument("--model", default="nvidia/nemotron-3.5-super-vl:free",
-                   help="id model trên OpenRouter (mặc định miễn phí, cần --allow-training; trả phí và tốt hơn: "
-                        "deepseek/deepseek-v4-pro)")
-    u.add_argument("--rounds", type=int, default=3, help="số lượt sửa theo lỗi của check sau lượt đầu (mặc định 3)")
+                   help="id model trên OpenRouter (mặc định miễn phí, cần --allow-training)")
+    u.add_argument("--mode", choices=("tiers", "one-shot"), default="tiers",
+                   help="tiers (mặc định): mỗi lượt xin một tầng, khung trước rồi mở từng ô; one-shot: cả sơ đồ "
+                        "trong một câu trả lời (cách cũ, giữ để so)")
+    u.add_argument("--rounds", type=int, default=3,
+                   help="số lượt sửa theo lỗi của check, cho mỗi phần (tiers) hay cả sơ đồ (one-shot); mặc định 3")
+    u.add_argument("--max-calls", type=int, default=16,
+                   help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 16, tối đa 40)")
     u.add_argument("--max-usd", type=float, default=0.5, help="trần tiền cho cả lần chạy (mặc định 0,5 USD)")
     u.add_argument("--force", action="store_true", help="dựng lại khi đã có graph.json (ô khoá phải giữ nguyên)")
     u.add_argument("--allow-training", action="store_true",

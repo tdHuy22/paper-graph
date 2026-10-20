@@ -312,6 +312,24 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
      chết lúc tắt mã -6, lỗi onnxruntime đã biết, chạy lại đạt).
    - Còn trong danh sách cải tiến: `build` dựng theo từng tầng (lớn, cần kế hoạch); chặn cứng lệnh mạng cho agent dựng
      (`permissions.deny`, cần bạn duyệt vì đổi cấu hình).
+10. **Kế hoạch `build` dựng theo từng tầng: bạn chốt cả 4 câu theo khuyến nghị** (2026-10-20, "chốt theo khuyến nghị
+    cả 4 câu … làm đi"; trang đã ghi quyết định). Trang:
+    https://claude.ai/artifact/VzGQsV8T99U1fMmi1hahP1 — ba phương án (A khung rồi mở từng ô, khuyên; B một lượt sửa
+    bằng bản vá; C theo từng mục), bốn câu chốt: phương án; lượt mở gửi toàn văn hay chỉ trang liên quan (khuyên toàn
+    văn); giữ cách cũ sau một cờ để so (khuyên giữ); đo 3 bài RAG, DataSentinel, Prism bằng Nemotron free (khoảng 45
+    lượt, sát hạn mức 50 lượt mỗi ngày của model free khi tổng nạp dưới 9 USD). Dùng lại: không có công cụ sẵn; kỹ
+    thuật dàn khung rồi mở rộng (Skeleton-of-Thought 2023, OmniThink 2025), tự viết trong `build.py`. Đọc bình luận
+    trên trang bằng ArtifactComments trước khi làm.
+11. **`build --mode tiers`: xong code, đo xong, chưa thắng cách cũ** (2026-10-20). Code: `_Caller` dùng
+    chung (ước tiền, thử lại, trần tiền, trần `--max-calls` kể cả thử lại), `run_tiers` (khung → mở từng ô tới sâu 3 →
+    lượt soát PG305/PG309), `--mode one-shot` giữ cách cũ; mặc định đang là tiers. Threat model TM-26..28 `đã có`.
+    Reviewer sonnet: 4 vừa, 5 thấp, sửa cả 9 (id không băm được làm sập; id sai mẫu lọt; dừng giữa lượt sửa khung mất
+    khung; dựng lại với ô khoá ở tầng dưới; …), 16 test lớp `Tiers`, đột biến các chốt chặn đều đỏ; 247 test đạt hai
+    Python (biên nhận). Đo (Nemotron free, khoảng 40 lượt, 0 USD; docs/bench.md mục cuối): tiers phủ RAG 14/14,
+    DataSentinel 13/13, Prism 11/13; một lượt 12/14, 11/13, 13/13; đủ thông tin Prism 5/12 so với 6/12 (skill 11/12).
+    Tiêu chí đặt trước chưa đạt (thua ở Prism). Phát hiện: sơ đồ không dày hơn (21–24 ô) vì model chỉ đánh dấu 2–3 ô
+    cần mở, không phải vì câu trả lời quá dài. Trang kế hoạch ghi kết quả. Còn treo (@ban): thử tiếp bản chương trình
+    tự mở mọi ô tầng đầu (trừ vấn đề), hay dừng và để one-shot làm mặc định; đã commit (bạn bảo "commit đợt này").
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
