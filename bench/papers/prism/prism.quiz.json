@@ -1,0 +1,211 @@
+{
+ "version": 1,
+ "paper": {
+  "title": "Prism Attention: Proposal-Refined Index Sharing Mechanism for Efficient LLMs Inference",
+  "sha256": "3ab0f927c0a69921845e0ac1a12800f1a96a130bb68d34d5b17f373ec65442ab",
+  "blocks": "prism.blocks.json"
+ },
+ "questions": [
+  {
+   "id": "q1",
+   "kind": "big",
+   "q": "Theo phân tích của bài, tập chỉ số top-κ của các lớp sau thay đổi thế nào so với lớp neo (anchor layer)?",
+   "choices": [
+    "Gần như không đổi qua độ sâu, nên dùng lại nguyên chỉ số của lớp neo hầu như không mất token quan trọng nào",
+    "Đổi rải rác khắp ngữ cảnh, không theo quy luật nào, nên lớp nào cũng phải chấm điểm lại toàn bộ ngữ cảnh",
+    "Có đổi, nhưng token chú ý mạnh vẫn ổn định và phần đổi dồn quanh rìa vùng đã chọn ở lớp trước",
+    "Đổi chủ yếu ở các token mới sinh gần đây, nên chỉ cần ghép thêm một cửa sổ token gần nhất vào chỉ số cũ"
+   ],
+   "answer": 2,
+   "explain": "Bài gọi đây là \"dịch chuyển token nổi bật giữa lớp có tính cục bộ\" (Hình 2): token chú ý mạnh giữ nguyên, phần thay đổi nằm gần ranh giới vùng đã chọn, nên một vùng ứng viên nới rộng chút ít là đủ bắt.",
+   "anchors": [
+    {"page": 2, "quote": "the core high-attention tokens remain largely stable, while most changes occur near the boundary"}
+   ]
+  },
+  {
+   "id": "q2",
+   "kind": "big",
+   "q": "So với IndexCache, Prism giữ nguyên phần nào và thiết kế lại phần nào?",
+   "choices": [
+    "Giữ cách chia lớp proposal/refined do hiệu chỉnh offline của IndexCache; thiết kế lại thứ lớp proposal truyền đi và cách lớp refined dùng nó",
+    "Giữ thứ truyền giữa các lớp (đúng κ chỉ số); thay hiệu chỉnh offline bằng quy hoạch động chọn lớp neo riêng cho từng đầu vào lúc chạy",
+    "Giữ bộ chọn token đầy đủ của IndexCache ở mọi lớp; chỉ thêm lượng tử hoá INT2 cho cả key lẫn value để giảm băng thông khi giải mã",
+    "Giữ cả cách chia lớp lẫn cách dùng lại chỉ số; chỉ thay hàm chấm điểm token bằng một cổng attention học được qua tự chưng cất"
+   ],
+   "answer": 0,
+   "explain": "Prism thừa hưởng phép gán lớp Proposal/Refined từ quy trình hiệu chỉnh offline của IndexCache, còn thông tin lớp proposal gửi đi (vùng ứng viên ρκ thay vì κ chỉ số) và cách lớp refined dùng nó (chọn lại trong vùng) là phần mới.",
+   "anchors": [
+    {"page": 4, "quote": "Prism inherits the assignment of Proposal/Refined layers from the original offline IndexCache"},
+    {"page": 4, "quote": "while redesigning the information transmitted by proposal layers and the way it"}
+   ]
+  },
+  {
+   "id": "q3",
+   "kind": "mechanism",
+   "q": "Lớp proposal chấm điểm toàn bộ ngữ cảnh với chi phí thấp bằng cách nào?",
+   "choices": [
+    "Lượng tử hoá key xuống INT4 theo từng token, rồi lấy trung bình điểm của mọi query head trong cùng nhóm GQA",
+    "Chỉ chấm điểm theo trang 32 token, dùng giá trị lớn nhất và nhỏ nhất của key trong trang làm ước lượng thô",
+    "Lượng tử hoá cả key lẫn value xuống INT8 đối xứng, rồi chỉ dùng query head đầu tiên của mỗi nhóm GQA",
+    "Lượng tử hoá key xuống 2 bit theo nhóm (bất đối xứng), rồi lấy max điểm qua các query head cùng nhóm GQA"
+   ],
+   "answer": 3,
+   "explain": "Key được lượng tử hoá bất đối xứng 2 bit theo từng nhóm g chiều; điểm proposal của mỗi token là max qua các query head dùng chung một KV head, nên mỗi KV head chỉ nạp một lần mỗi bước.",
+   "anchors": [
+    {"page": 5, "quote": "Prism addresses this bottleneck by compressing the key cache to INT2 for candidate scoring."},
+    {"page": 6, "quote": "The max-reduction aggregates multiple query heads into one score per KV head"}
+   ]
+  },
+  {
+   "id": "q4",
+   "kind": "mechanism",
+   "q": "Ở một bước giải mã, bản thân lớp proposal attend tới những token nào?",
+   "choices": [
+    "Toàn bộ vùng ứng viên ρκ token, vì vùng này đã được chấm điểm sẵn bằng key INT2 nên attend thêm không tốn",
+    "Top-κ token của chính nó; vùng ứng viên ρκ chỉ được lưu lại để các lớp refined phía sau dùng",
+    "Toàn bộ ngữ cảnh bằng FlashAttention, vì lớp proposal cần attention chính xác để dựng vùng ứng viên",
+    "Top-κ token mà lớp proposal liền trước đã chọn, cộng thêm các token sinh ra ở bước giải mã trước"
+   ],
+   "answer": 1,
+   "explain": "Lớp proposal lấy top-ρκ làm vùng ứng viên và lưu lại cho các lớp sau, nhưng chính nó vẫn chỉ attend tới top-κ của nó.",
+   "anchors": [
+    {"page": 5, "quote": "The proposal layer itself still attends to its own top-κ tokens"}
+   ]
+  },
+  {
+   "id": "q5",
+   "kind": "mechanism",
+   "q": "Lớp refined chọn tập token thưa của mình thế nào, và chi phí bước chọn đổi ra sao khi ngữ cảnh dài ra?",
+   "choices": [
+    "Chấm điểm lại chỉ trong vùng ứng viên thừa hưởng rồi lấy top-κ; chi phí gần như không đổi theo độ dài",
+    "Chấm điểm lại cả ngữ cảnh bằng key INT2 rồi lấy top-κ; chi phí tăng tuyến tính nhưng rẻ hơn key đầy đủ",
+    "Dùng lại điểm lớp proposal đã tính, chỉ cắt vùng ứng viên xuống top-κ; chi phí bằng không ở mọi độ dài",
+    "Lấy hợp vùng ứng viên với cửa sổ token gần nhất rồi chấm lại; chi phí tăng chậm theo căn bậc hai độ dài"
+   ],
+   "answer": 0,
+   "explain": "Lớp refined tính lại điểm bằng query của chính nó nhưng chỉ trên các token trong vùng ứng viên, rồi lấy top-κ; vì vùng có kích thước cố định nên bước này mất khoảng 0,011 ms ở mọi độ dài từ 8K tới 128K (Bảng 6, BSZ=4).",
+   "anchors": [
+    {"page": 5, "quote": "Prism avoids full-context search and refines the inherited proposal locally"},
+    {"page": 8, "quote": "Refinement scans only the inherited candidate pool, so its cost is independent of context length."}
+   ]
+  },
+  {
+   "id": "q6",
+   "kind": "mechanism",
+   "q": "Khi đưa Prism lên GLM-5.2, cấu hình 10F11R57S có ba loại lớp F, R, S. Lớp S trong cấu hình này làm gì?",
+   "choices": [
+    "Dựng chỉ số từ toàn bộ ngữ cảnh như lớp F, nhưng chấm điểm bằng key INT2 thay cho key đầy đủ để rẻ hơn",
+    "Tự chọn top-κ của riêng nó trong vùng ρκ ứng viên do lớp F gần nhất phía trước dựng ra",
+    "Dùng lại nguyên κ chỉ số của lớp F hay lớp R gần nhất phía trước, không chọn lại gì",
+    "Bỏ attention thưa, tính attention đầy đủ trên toàn ngữ cảnh để giữ độ chính xác cho RULER"
+   ],
+   "answer": 2,
+   "explain": "Ở Bảng 9, F dựng vùng ρκ ứng viên, R chọn top-κ của nó trong vùng của lớp F gần nhất, còn S dùng lại κ chỉ số của lớp F hay R gần nhất phía trước. Phương án thứ hai là việc của lớp R.",
+   "anchors": [
+    {"page": 19, "quote": "each S layer reuses the κ indices of its nearest preceding F or R layer"}
+   ]
+  },
+  {
+   "id": "q7",
+   "kind": "evidence",
+   "q": "Mức tăng tốc giải mã đầu-cuối khoảng 3,4× so với FlashAttention ở 128K (Qwen3-4B, SGLang) đo ở batch nào, và ở batch 1 cùng 128K thì sao?",
+   "choices": [
+    "Đo ở batch 1; lên batch 16 mức tăng tốc đạt khoảng 7,5× vì chi phí lớp proposal được chia đều hơn",
+    "Đo ở batch 16; ở batch 1 Prism-g4 còn chậm hơn FlashAttention (khoảng 0,86×) vì phí lượng tử hoá cố định",
+    "Đo ở batch 4; ở batch 1 mức tăng tốc gần như giữ nguyên (khoảng 3,3×) vì lớp refined không phụ thuộc độ dài",
+    "Đo ở batch 16; ở batch 1 cùng độ dài 128K, Prism-g4 chỉ nhanh hơn FlashAttention khoảng 1,15×"
+   ],
+   "answer": 3,
+   "explain": "Hình 7 và Bảng 8: 15,03 ms xuống 4,47 ms ở 128K với BSZ=16 (3,36×). Cùng bảng, BSZ=1 ở 128K là 3,074 so với 2,678 ms (1,15×); con số 0,86× là BSZ=1 ở 16K, còn 7,50× là tăng tốc kernel mỗi lớp chứ không phải đầu-cuối.",
+   "anchors": [
+    {"page": 8, "quote": "the per-step latency of FlashAttention from 15.03 ms to 4.47 ms at 128K"},
+    {"page": 18, "quote": "End-to-end per-step decoding latency on Qwen3-4B with the SGLang serving framework"}
+   ]
+  },
+  {
+   "id": "q8",
+   "kind": "evidence",
+   "q": "Hình 8 (AIME25, Qwen3-4B) cho thấy gì khi tăng hệ số mở rộng vùng ứng viên ρ?",
+   "choices": [
+    "Độ chính xác tăng đều từ ρ = 1 tới ρ = 8, nên bài khuyên chọn ρ lớn nhất mà bộ nhớ còn chịu được",
+    "Từ ρ = 1 lên 4 độ chính xác tăng từ 59,22 lên 64,43, nhưng lên ρ = 8 thì lại giảm nhẹ",
+    "Gần như không đổi theo ρ (dao động dưới nửa điểm), trong khi tăng κ mới là yếu tố quyết định",
+    "Cao nhất ở ρ = 2, vì vùng ứng viên lớn hơn đã làm loãng bước chọn lại ngay từ ρ = 4 trở lên"
+   ],
+   "answer": 1,
+   "explain": "ρ = 1, 2, 4, 8 cho 59,22, 61,20, 64,43, 62,50. Bài giải thích vùng quá lớn đưa thêm ứng viên nhiễu làm yếu bước chọn lại.",
+   "anchors": [
+    {"page": 9, "quote": "Increasing ρ from 1 to 4 improves accuracy from 59.22 to 64.43"},
+    {"page": 9, "quote": "further increasing ρ to 8 slightly degrades performance"}
+   ]
+  },
+  {
+   "id": "q9",
+   "kind": "evidence",
+   "q": "Ở Bảng 1 (suy luận, Qwen3-4B), điểm trung bình của Prism đứng thế nào so với LessIsMore và Full Attention?",
+   "choices": [
+    "Prism hơn LessIsMore khoảng 1,27 điểm trung bình, và vượt cả Full Attention ở trung bình bốn tập",
+    "Prism thua LessIsMore ở trung bình bốn tập, nhưng thắng rõ ở AIME25, nơi Prism vượt cả Full Attention",
+    "Prism hơn LessIsMore chỉ 0,25 điểm (71,43 so với 71,18) và vẫn dưới Full Attention (71,95)",
+    "Prism ngang LessIsMore ở trung bình, và cả hai cao hơn Full Attention khoảng nửa điểm nhờ bỏ token nhiễu"
+   ],
+   "answer": 2,
+   "explain": "Bảng 1, Qwen3-4B: Full Attention 71,95, LessIsMore 71,18, Prism 71,43. Con số 1,27 trong chữ là khoảng hơn IndexCache (70,16), không phải LessIsMore; chữ chỉ nêu Prism hơn LessIsMore 1,21 điểm trên AIME24/25, không nêu trên trung bình bốn tập.",
+   "anchors": [
+    {"page": 7, "quote": "On Qwen3-4B, Prism reaches an average score of 71.43"},
+    {"page": 7, "quote": "Accuracy comparison on reasoning benchmarks using Qwen3-4B and Qwen3-8B"}
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "detail",
+   "q": "Trong các thí nghiệm độ chính xác chính (Bảng 1, 2), κ và ρ được đặt thế nào?",
+   "choices": [
+    "κ = 2048 cho mọi tác vụ; ρ = 4 cho ngữ cảnh dài (vùng 8192) và ρ = 2 cho suy luận (vùng 4096)",
+    "κ = 1024 cho mọi tác vụ; ρ = 4 cho suy luận (vùng 4096) và ρ = 8 cho ngữ cảnh dài (vùng 8192)",
+    "κ = 2048 cho mọi tác vụ; ρ = 2 cho ngữ cảnh dài (vùng 4096) và ρ = 4 cho suy luận (vùng 8192)",
+    "κ = 512 cho suy luận, κ = 2048 cho ngữ cảnh dài; ρ = 4 cho cả hai loại tác vụ (vùng ρκ token)"
+   ],
+   "answer": 0,
+   "explain": "Mục 5.1: ngân sách cuối κ = 2048; ρ = 4 cho tác vụ ngữ cảnh dài (n = 8192), ρ = 2 cho suy luận (n = 4096). κ = 1024 là cấu hình của phần ablation.",
+   "anchors": [
+    {"page": 7, "quote": "set the final sparse budget to κ = 2048, with a proposal expansion factor"},
+    {"page": 7, "quote": "ρ = 2 for reasoning tasks (n = 4096)"}
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "limit",
+   "q": "Ở ngữ cảnh ngắn và batch nhỏ, phụ lục D ghi nhận gì về tốc độ của Prism?",
+   "choices": [
+    "Prism vẫn nhanh hơn FlashAttention ở mọi độ dài, chỉ có mức tăng tốc kém IndexCache khoảng một nửa",
+    "Prism nhanh hơn cả IndexCache ở ngữ cảnh ngắn vì vùng ứng viên nhỏ, nhưng chậm hơn ở 128K với batch 16",
+    "Bài không đo dưới 64K, vì chỉ từ 64K trở lên attention mới thành nút thắt nên đo ngắn hơn không có ý nghĩa",
+    "Prism tốn thêm so với IndexCache, có khi chậm hơn cả FlashAttention, do phí INT2 và vùng ứng viên cố định"
+   ],
+   "answer": 3,
+   "explain": "Bảng 7: ở BSZ=1, 8K hiệu quả của Prism là 0,61× so với FlashAttention (IndexCache 0,93×). Bài nói lượng tử hoá INT2 và vùng ứng viên lớn hơn tạo phí cố định chưa được chia đều; khoảng cách chỉ đảo chiều ở 128K với BSZ=16.",
+   "anchors": [
+    {"page": 17, "quote": "Prism carries a modest overhead relative to IndexCache at short contexts and small batches"},
+    {"page": 17, "quote": "since INT2 quantization and the enlarged candidate pool introduce a fixed cost"}
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "limit",
+   "q": "Mục giới hạn (phụ lục F) tự nhận điểm yếu nào của Prism?",
+   "choices": [
+    "Lượng tử hoá key xuống INT2 làm mất độ chính xác ở tác vụ ngữ cảnh dài, nên cần thử lại với key 4 bit",
+    "Cách chia lớp lấy nguyên của IndexCache, tìm một lần trên dữ liệu toán rồi đóng băng, dù độ lệch phụ thuộc tác vụ",
+    "Prism chỉ chạy với GQA, chưa dùng được cho MLA nên chưa thử được trên các model họ DeepSeek hay GLM",
+    "Prism cần tinh chỉnh lại model để các lớp refined học cách chọn token, nên tốn thêm chi phí huấn luyện"
+   ],
+   "answer": 1,
+   "explain": "Bài dùng nguyên quy trình hiệu chỉnh tham lam của IndexCache (dữ liệu toán, mục tiêu cross-entropy, đóng băng) và không coi nó là biến thiết kế, trong khi phân tích của chính bài cho thấy độ trôi chỉ số giữa lớp phụ thuộc tác vụ. Prism không cần huấn luyện; phụ lục B phân tích GLM-4.7-Flash (MLA), phụ lục E chạy Prism trên GLM-5.2.",
+   "anchors": [
+    {"page": 20, "quote": "We adopt this recipe as is and do not treat the calibration procedure"},
+    {"page": 20, "quote": "our analysis shows cross-layer index drift to be markedly task-dependent"}
+   ]
+  }
+ ]
+}

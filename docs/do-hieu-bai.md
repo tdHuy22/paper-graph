@@ -82,3 +82,34 @@ Chạy khi chưa có người đọc, để xem model có làm người đọc t
   `evidence`), so mã vị trí hình sin với mã học được (q12, `limit`). Người đọc qua sơ đồ Attention chỉ trả lời được
   ba câu này nếu mở câu trích hay đã biết từ trước.
 - Không sửa sơ đồ Attention theo ba câu này trước khi đo người thật: sơ đồ chỉnh theo đề thì phép đo hết công bằng.
+
+### Lượt 2: hai bài ra sau mốc dữ liệu (2026-10-19)
+
+Thêm hai bài nộp arXiv ngày 16/10/2026 vào bộ đo (`bench/papers.json`, PDF ở `bench/pdf/`): Prism Attention
+(`prism`, 20 trang, bài phương pháp) và Ignored, Not Refused (`ignored`, 17 trang, bài đánh giá về prompt injection).
+Đáp án `*.gold.json` và bộ 12 câu `*.quiz.json` do một agent Opus soạn chỉ từ đầu ra `read`; sơ đồ do skill dung-so-do
+dựng (Opus, `.tmp/dung-so-do-workspace/iteration-8/`), không agent nào thấy kết quả của agent kia. Cùng cách đo như
+lượt 1 (6 agent Sonnet; câu trả lời ở `.tmp/do-hieu-bai/2026-10-19-model-moi/`).
+
+| Bài | Không đọc | Đọc chữ | Đọc sơ đồ |
+|---|---|---|---|
+| Prism | 0/12 (12 "Không biết") | 12/12 | 11/12, 1 "Không biết" (q6) |
+| Ignored | 3/12 (9 "Không biết") | 12/12 | 11/12, 1 "Không biết" (q3) |
+
+- Điều kiện "không đọc" giờ ra điểm thấp: model không biết hai bài này. Ba câu Ignored đoán được không cần đọc (q1 lộ từ
+  tên bài, q2 và q6 suy được từ cách đặt câu hỏi), đúng như agent soạn đề tự báo trước.
+- Đọc chữ vẫn 12/12: model đọc trọn 60–70 nghìn ký tự không mệt, không hết giờ, nên phép đo bằng model chỉ đo được sơ
+  đồ có đủ thông tin hay không (đọc sơ đồ so với đọc chữ), không đo được sơ đồ có giúp người hiểu nhanh hơn không.
+- Sơ đồ đủ cho 11/12 câu ở cả hai bài. Câu thiếu: Prism q6 (sơ đồ ghi cấu hình 10F11R57S của GLM-5.2 nhưng không nói
+  lớp S làm gì, Bảng 9), Ignored q3 (sơ đồ liệt kê nhãn Genuine Refusal, Inert-Recognized mà không nói hai nhãn khác
+  nhau ở đâu). Thêm ba câu agent chọn đúng dù một vế của đáp án không có trong sơ đồ (Prism q11; Ignored q4, q5, q10):
+  sơ đồ đủ để loại phương án sai, chưa đủ để nói lại trọn ý.
+- So với lượt 1: sơ đồ RAG (dựng bằng skill, đã soát tay) đủ 12/12, sơ đồ Attention (dựng tay, 21 ô) 9/12; hai sơ đồ
+  skill dựng mới (48 ô mỗi bài, chưa soát tay) 11/12.
+- Điểm sơ đồ theo đáp án (`score`): Ignored phủ 14/14, đúng tầng 100%, quan hệ 57%, soi 2/4. Prism lần chấm đầu phủ
+  13/13, đúng tầng 46%, quan hệ 50%, soi 1/3: ý `method` của đáp án chỉ neo câu giới thiệu ở trang 2, nên ô "Phương
+  pháp" neo vào §4 không khớp, kéo theo cả ba ý `under:method`. Reviewer (không đọc sơ đồ) xác nhận đáp án neo quá hẹp;
+  thêm neo §4 (p4-b5), chấm lại: đúng tầng 77%, quan hệ 67%. Phần còn trượt: sơ đồ tách kết quả thành hai ô tầng đầu
+  (độ chính xác, tốc độ; skill cho phép), đáp án chỉ có một ý `result`. Không sửa đáp án thêm theo sơ đồ. Điểm soi
+  `speedup_bsz16` trượt dù sơ đồ có cả 3,36× và 1,15× (ở hai ô nối bằng cạnh `contradicts`): điểm soi `note` đòi cả hai
+  số trong một ô.

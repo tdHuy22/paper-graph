@@ -1,10 +1,10 @@
 # Bộ đo
 
-Năm bài, ghim theo SHA-256 của PDF trong [bench/papers.json](../bench/papers.json). PDF nằm ở `../pdf-translator/data/`
-và không vào git; chữ trích ra (`*.blocks.json`) cũng không.
+Bảy bài, ghim theo SHA-256 của PDF trong [bench/papers.json](../bench/papers.json). PDF nằm ở `../pdf-translator/data/`
+hay `bench/pdf/` (hai bài mới, tải từ `source`) và không vào git; chữ trích ra (`*.blocks.json`) cũng không.
 
 ```bash
-../pdf-translator/.venv/bin/python bench/prepare.py          # trích lại blocks của cả năm bài (~2 phút)
+../pdf-translator/.venv/bin/python bench/prepare.py          # trích lại blocks của cả bảy bài (~3 phút)
 ../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .
 ```
 
@@ -15,6 +15,8 @@ và không vào git; chữ trích ra (`*.blocks.json`) cũng không.
 | DataSentinel | bài bảo mật: mô hình đe dọa, trò chơi minimax, tấn công thích nghi | 13 | 4 |
 | RoFormer | nặng công thức; kết quả trộn (GLUE hơn BERT 3/6 tập, và hàng BERT là số tập test còn RoFormer là validation); tuyên bố văn bản dài so RoFormer-1024 với các mô hình khác ở 512 | 14 | 9 |
 | RAG | bài giữ riêng để đo độc lập: chưa từng dùng làm nguồn sửa skill (thêm 2026-10-14); chữ và Bảng 4 lệch số, tóm tắt nói "ba" tập QA còn §4.1 nói "bốn" | 14 | 7 |
+| Prism Attention | nộp arXiv 16/10/2026, sau mốc dữ liệu của model (thêm 2026-10-19); phương pháp có cơ chế; tóm tắt nêu 3,4× không kèm batch (ở batch 1 chỉ 1,15×) | 13 | 7 |
+| Ignored, Not Refused | nộp arXiv 16/10/2026, sau mốc dữ liệu (thêm 2026-10-19); bài đánh giá về prompt injection, có câu tấn công mẫu thật trong bài; tóm tắt và phần đóng góp lấy hai mốc ASR khác nhau | 14 | 5 |
 
 ## Hai thứ trong mỗi thư mục bài
 

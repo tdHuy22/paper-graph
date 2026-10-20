@@ -286,7 +286,18 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    bài nên phép đo này không đo được hiểu bài; chỉ cho biết độ đủ thông tin của sơ đồ: RAG đủ cho 12/12 câu, Attention
    thiếu 3 câu `evidence`/`limit`. Đừng thêm ô vào sơ đồ Attention theo ba câu này trước khi đo người thật (sơ đồ sẽ
    bị chỉnh theo đề). Chi tiết: `docs/do-hieu-bai.md` mục "Phép đo thay bằng model"; câu trả lời và script chấm ở
-   `.tmp/do-hieu-bai/2026-10-19-model/`. Việc 6.1 vẫn mở (@ban).
+   `.tmp/do-hieu-bai/2026-10-19-model/`. Đã commit `7e6c427` (bạn bảo "commit đi"). Việc 6.1 vẫn mở (@ban).
+8. **Xong: thêm hai bài ra sau mốc dữ liệu vào bộ đo, đo lại bằng model** (2026-10-19, bạn duyệt tải). Prism
+   Attention (arXiv 2610.22985, CC BY 4.0) và Ignored, Not Refused (arXiv 2610.23254, CC BY-NC-SA 4.0), nộp 16/10/2026;
+   PDF ở `bench/pdf/` (không vào git), `bench/papers.json` ghim sha256 và `source`. Gold + quiz do agent Opus soạn chỉ
+   từ `read`; sơ đồ do skill dựng (`.tmp/dung-so-do-workspace/iteration-8/`, 48 ô mỗi bài, `check` 0 lỗi 0 cảnh báo).
+   Đo (6 agent Sonnet): không đọc Prism 0/12, Ignored 3/12; đọc chữ 12/12 cả hai; đọc sơ đồ 11/12 cả hai. Model hết
+   thuộc bài, nhưng đọc chữ vẫn trọn điểm nên phép đo bằng model chỉ đo độ đủ thông tin của sơ đồ, không đo được sơ đồ
+   giúp người hiểu nhanh hơn. `score`: Prism phủ 13/13, tầng 77% (sau khi sửa neo `method` của gold), quan hệ 67%, soi
+   1/3; Ignored 14/14, tầng 100%, quan hệ 57%, soi 2/4. Cổng chốt việc (rủi ro vừa, reviewer sonnet): 0 đáp án sai,
+   1 vừa (neo `method` quá hẹp, đã sửa), 3 thấp (test quiz thiếu hai bài, docs "năm bài" và nguồn PDF, lời giải thích
+   lệch nhẹ), sửa cả 4. 228 test đạt (biên nhận). Chi tiết: `docs/do-hieu-bai.md` "Lượt 2". Đã commit (bạn bảo "commit đi", 2026-10-20).
+   Phát hiện phụ: `read --find` không tìm trong chữ của vùng bảng.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 

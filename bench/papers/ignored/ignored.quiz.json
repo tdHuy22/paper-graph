@@ -1,0 +1,286 @@
+{
+ "version": 1,
+ "paper": {
+  "title": "Ignored, Not Refused: What Low Prompt-Injection Success Rates Hide in Small Tool-Using Agents",
+  "sha256": "391790057356fafd47e00f45972d711c277b5138f7c068eb74269386b73a51da",
+  "blocks": "ignored.blocks.json"
+ },
+ "questions": [
+  {
+   "id": "q1",
+   "kind": "big",
+   "q": "Bài kết luận ASR thấp của các agent nhỏ (2–14B) trên InjecAgent và AgentDojo chủ yếu che giấu điều gì?",
+   "choices": [
+    "Phần lớn tấn công thất bại là do đầu ra hỏng hay không gọi được công cụ, nên bài đề nghị bỏ các ca này khỏi mẫu số ASR",
+    "Phần lớn agent đã nhận ra và từ chối lời chèn trong suy luận, nhưng benchmark không ghi nhận lời từ chối nên đánh giá thấp chúng",
+    "Phần lớn agent lặng lẽ bỏ qua lời chèn mà không từ chối, nên ASR thấp phản ánh việc chưa ai bảo chúng làm theo, không phải một ranh giới được giữ",
+    "Phần lớn tấn công thất bại vì lời chèn tĩnh quá yếu, nên bài đề nghị thay hai benchmark bằng tấn công thích nghi để đo lại ASR"
+   ],
+   "answer": 2,
+   "explain": "Trong các tấn công benchmark chấm thất bại, 76–80% là bị bỏ qua, chỉ 17–18% là từ chối. Phần bàn luận gọi đây là ảo giác do scaffold: lời chèn chưa được kích hoạt chứ không bị chặn.",
+   "anchors": [
+    {
+     "page": 1,
+     "quote": "A low ASR therefore mostly reflects agents silently ignoring injections, not refusing them."
+    },
+    {
+     "page": 8,
+     "quote": "but because default scaffolds leave injected instructions untriggered"
+    }
+   ]
+  },
+  {
+   "id": "q2",
+   "kind": "big",
+   "q": "Để trả lời ba câu hỏi nghiên cứu, bài chọn cách làm nào?",
+   "choices": [
+    "Không xây benchmark mới: gắn nhãn hành vi cho trajectory mà hai benchmark có sẵn đã chấm, rồi đổi điều kiện triển khai và xét cả việc có xong không",
+    "Xây một benchmark nhiều lượt mới, tách trường hợp agent bỏ qua lời chèn với trường hợp agent xử lý lời chèn như dữ liệu, rồi chạy lại cả mười một agent trên đó",
+    "Gắn đầu dò lên activation của từng agent để phát hiện lúc model nhận ra lời chèn, rồi so với hành động gọi công cụ mà benchmark đã chấm",
+    "Thiết kế một lớp phòng thủ lọc lệnh khỏi đầu ra công cụ, rồi so ASR và utility của mười một agent khi có và không có lớp lọc đó"
+   ],
+   "answer": 0,
+   "explain": "Bài nói rõ không xây benchmark mới: nó kiểm toán 33.000 trajectory của InjecAgent và AgentDojo bằng giám khảo LLM, đổi system prompt hay độ chính xác, và dùng ATOM. Benchmark tách bỏ qua với xử lý như dữ liệu là của Hermon et al.; đầu dò activation là của Leong; bài tự nói chỉ đọc hành động và suy luận, không đọc activation.",
+   "anchors": [
+    {
+     "page": 2,
+     "quote": "Our work fills this gap without building a new benchmark."
+    },
+    {
+     "page": 3,
+     "quote": "It reads only the agents’ actions and stated reasoning, not their internal activations."
+    }
+   ]
+  },
+  {
+   "id": "q3",
+   "kind": "mechanism",
+   "q": "Theo định nghĩa của giám khảo, Genuine Refusal và Inert-Recognized khác nhau ở điểm nào?",
+   "choices": [
+    "Genuine Refusal cần agent gửi lời cảnh báo cho người dùng ở câu trả lời cuối; Inert-Recognized là khi agent nhận ra lời chèn nhưng không báo gì cho người dùng",
+    "Genuine Refusal là khi việc của người dùng vẫn xong; Inert-Recognized là khi agent nhận ra lời chèn nhưng bỏ dở việc của người dùng",
+    "Genuine Refusal là khi agent không gọi công cụ nào; Inert-Recognized là khi agent vẫn gọi công cụ nhưng không gọi công cụ của kẻ tấn công",
+    "Cả hai đều không làm theo; Genuine Refusal coi đoạn chèn là tấn công hay không được phép, Inert-Recognized chỉ coi nó là lời nhờ gửi tới mình"
+   ],
+   "answer": 3,
+   "explain": "Genuine Refusal: suy luận gọi đoạn chèn là tấn công hay không được phép và không làm theo. Inert-Recognized: suy luận nhận ra đó là lệnh gửi tới agent nhưng agent không làm theo mà cũng không bác bỏ nó. Báo cho người dùng hay xong việc không phải tiêu chí.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "the reasoning identifies the injection as an attack or as unauthorized, and it is not executed"
+    },
+    {
+     "page": 4,
+     "quote": "but the agent neither executes nor rejects it"
+    }
+   ]
+  },
+  {
+   "id": "q4",
+   "kind": "mechanism",
+   "q": "Khi câu trích làm chứng mà giám khảo đưa ra không có nguyên văn trong suy luận của agent, chuyện gì xảy ra?",
+   "choices": [
+    "Trajectory bị loại khỏi mẫu và thay bằng một trajectory khác rút từ cùng tầng lấy mẫu, để mỗi ô vẫn đủ 500 trajectory đã khoá trước",
+    "Giám khảo được hỏi lại tối đa hai lần; vẫn lệch thì bỏ cờ nhận ra và nhãn thành Inert-Unrecognized, nên tỷ lệ nhận ra là cận dưới",
+    "Trajectory được chuyển cho hai tác giả gắn nhãn bằng tay, và nhãn của người thay nhãn của giám khảo trong kết quả cuối",
+    "Nhãn bị hạ xuống Mechanical Breakdown, vì câu trích không khớp được coi là dấu hiệu suy luận của agent bị cắt cụt"
+   ],
+   "answer": 1,
+   "explain": "Một chương trình so câu trích đã chuẩn hoá với suy luận; lệch thì hỏi lại tối đa hai lần, còn lệch thì đặt nhận ra là sai và nhãn thành Inert-Unrecognized. Vì chỉ hạ xuống, tỷ lệ nhận ra là cận dưới thận trọng.",
+   "anchors": [
+    {
+     "page": 13,
+     "quote": "if the mismatch persists, recognition is set to false and the label becomes Inert-Unrecognized"
+    },
+    {
+     "page": 4,
+     "quote": "Claims lacking verbatim textual grounding are downgraded to Inert-Unrecognized"
+    }
+   ]
+  },
+  {
+   "id": "q5",
+   "kind": "mechanism",
+   "q": "Bài nêu lý do gì cho việc chọn DeepSeek-V4.1-Flash làm giám khảo?",
+   "choices": [
+    "Nó đã được tinh chỉnh trên trajectory của AgentDojo, nên đọc được định dạng gọi công cụ của cả mười một agent mà không cần chuyển đổi",
+    "Nó là model không suy luận, nên không bị chính các lời chèn nằm trong trajectory dẫn dắt khi đọc chuỗi suy luận của agent",
+    "Không agent nào được đánh giá thuộc họ DeepSeek, tránh việc giám khảo ưu ái chữ của họ mình; và model suy luận chịu lời chèn tốt hơn",
+    "Trong thử nghiệm trước, nó khớp nhãn của tác giả ở cả sáu nhãn với tỷ lệ cao nhất trong các model giám khảo được cân nhắc"
+   ],
+   "answer": 2,
+   "explain": "Giấu tên model chưa đủ vì giám khảo LLM nhận ra chữ do họ mình sinh ra; không agent nào thuộc họ DeepSeek. Là model suy luận, nó chấm chính xác hơn và chịu lời chèn tốt hơn, điều cần vì trajectory nào cũng chứa lời chèn.",
+   "anchors": [
+    {
+     "page": 4,
+     "quote": "We therefore use DeepSeek-V4.1-Flash as the judge, since no agent"
+    },
+    {
+     "page": 4,
+     "quote": "This robustness is essential here, because every trajectory the judge reads contains an injection."
+    }
+   ]
+  },
+  {
+   "id": "q6",
+   "kind": "mechanism",
+   "q": "Cặp prompt Interdict/Authorize kiểm giả thuyết Untriggered Default. Kết quả nào thì ủng hộ giả thuyết đó?",
+   "choices": [
+    "ASR dưới Authorize cao hơn hẳn baseline, và baseline cao hơn hẳn Interdict: agent bỏ qua lời chèn chỉ vì không ai bảo làm, chứ không giữ ranh giới lệnh–dữ liệu",
+    "ASR gần như không đổi giữa Authorize, baseline và Interdict: agent đã tự giữ ranh giới giữa lệnh và dữ liệu, nên lời cho phép không có tác dụng",
+    "ASR dưới Interdict cao hơn baseline: nhắc tới lời chèn trong system prompt làm agent chú ý tới nó hơn, nên dễ làm theo hơn",
+    "ASR dưới Authorize chỉ tăng ở những agent có tỷ lệ đầu ra không hợp lệ cao, vì prompt dài hơn giúp chúng gọi công cụ đúng định dạng"
+   ],
+   "answer": 0,
+   "explain": "Nếu agent nhỏ bỏ qua lời chèn vì giữ ranh giới, lời cho phép hầu như không đổi gì. Nếu chỉ vì không có gì bảo chúng làm, thì ASR Authorize ≫ baseline ≫ Interdict. Kết quả 43% / 8,09% / 0,22% khớp giả thuyết thứ hai.",
+   "anchors": [
+    {
+     "page": 5,
+     "quote": "If small agents ignore injections because they enforce a boundary between instructions and data, permission should barely matter."
+    },
+    {
+     "page": 7,
+     "quote": "As predicted by the Untriggered Default, low baseline ASR stems from inactivity rather than defense."
+    }
+   ]
+  },
+  {
+   "id": "q7",
+   "kind": "evidence",
+   "q": "Trên InjecAgent, ASR gộp lần lượt là bao nhiêu với prompt Authorize, với baseline FP16, và với prompt Interdict?",
+   "choices": [
+    "70,88% với Authorize, 8,09% với baseline, và 0,95% với Interdict",
+    "43,05% với Authorize, 11,96% với baseline, và 0,95% với Interdict",
+    "27,42% với Authorize, 8,09% với baseline, và 0,22% với Interdict",
+    "43,05% với Authorize, 8,09% với baseline, và 0,22% với Interdict"
+   ],
+   "answer": 3,
+   "explain": "Trên 10.698 ca chạy cả hai prompt: Authorize 43,05%, Interdict 0,22%, baseline 8,09%. 70,88% là riêng Spark-4B dưới Authorize, 0,95% là mức sau guardrail, 11,96% là baseline của AgentDojo, 27,42% là ASR baseline của Ornith-9B.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "raises pooled ASR to 43.05% [42.11, 43.99], against 8.09% at baseline"
+    },
+    {
+     "page": 7,
+     "quote": "A matched prompt forbidding them (Interdict) lowers it to 0.22%"
+    }
+   ]
+  },
+  {
+   "id": "q8",
+   "kind": "evidence",
+   "q": "Trong ma trận ATOM của AgentDojo, ô chiếm 21,7% số episode là ô nào, và thước đo cũ nào xếp nó sai?",
+   "choices": [
+    "Unsafe but Useful: kẻ tấn công đạt mục tiêu mà việc vẫn xong, và UA tính các episode này là hữu ích",
+    "Safe but Dysfunctional: tấn công thất bại mà việc của người dùng cũng không xong, và ASR tính đó là phòng thủ thành công",
+    "Safe but Dysfunctional: tấn công thất bại mà việc cũng không xong, và UA tính các episode này là hoàn thành việc",
+    "Unsafe and Hijacked: kẻ tấn công đạt mục tiêu và việc không xong, và NRP gộp các episode này chung với các ca hoàn thành việc"
+   ],
+   "answer": 1,
+   "explain": "Một phần năm episode là Safe but Dysfunctional (21,7%); ASR coi chúng là phòng thủ thành công. Unsafe but Useful chỉ 3,8% và là chỗ UA tính nhầm là hữu ích.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "Yet one in five is Safe but Dysfunctional (21.7%)."
+    },
+    {
+     "page": 7,
+     "quote": "which ASR misclassifies as successful defense"
+    }
+   ]
+  },
+  {
+   "id": "q9",
+   "kind": "evidence",
+   "q": "Phục vụ cùng model ở FP8 và NF4 thay vì FP16 làm ASR thay đổi thế nào, và bài giải thích ra sao?",
+   "choices": [
+    "ASR giảm nhẹ, nhưng không vì phòng thủ tốt hơn: tỷ lệ từ chối không đổi, đầu ra hỏng tăng, và NF4 làm giảm cả Safe-and-Useful lẫn UA",
+    "ASR tăng rõ, vì lượng tử hoá làm hỏng phần tinh chỉnh an toàn, khớp với các nghiên cứu trước về độ chính xác thấp làm đổi hành vi an toàn",
+    "ASR giảm nhẹ, và tỷ lệ từ chối tăng tương ứng, nên bài coi lượng tử hoá là một cách phòng thủ rẻ cho người triển khai trên máy cục bộ",
+    "ASR giảm gần về không ở mọi agent, vì ở NF4 hầu hết agent không còn gọi được công cụ theo đúng định dạng của benchmark"
+   ],
+   "answer": 0,
+   "explain": "InjecAgent 8,09% xuống 7,50% (FP8) và 6,35% (NF4); AgentDojo 11,96% xuống 11,11% và 9,63%. Tỷ lệ từ chối không đổi; Qwen-4B ở NF4 có đầu ra không hợp lệ tăng từ 19 lên 115; NF4 giảm ASR 2,33 điểm nhưng giảm Safe-and-Useful 3,97 điểm và UA 4,75 điểm.",
+   "anchors": [
+    {
+     "page": 7,
+     "quote": "This is not improved defense, as refusal rates remain flat across precisions"
+    },
+    {
+     "page": 7,
+     "quote": "NF4 reduces ASR by 2.33 points, but cuts Safe-and-Useful episodes by 3.97 points"
+    }
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "detail",
+   "q": "Agent nào có ASR 0,00% trên InjecAgent ở FP16 mà phần lớn ca không hề thử được sức chống lời chèn?",
+   "choices": [
+    "Ministral-14B, vì phần lớn đầu ra không hợp lệ của nó là câu trả lời rỗng sau khi suy luận, nên parser không chấm được",
+    "Spark-4B, vì nó từ chối gần như mọi lời chèn nó nhận ra, nên hầu như không có ca nào kẻ tấn công đạt mục tiêu",
+    "LFM-2.6B, vì 735 trong 1.054 đầu ra bị parser loại là không hợp lệ, phần lớn do viết câu văn vào chỗ tên công cụ",
+    "MiniCPM-2B, vì nó dừng ở lượt đầu mà không gọi công cụ nào, nên lời chèn trong đầu ra công cụ không bao giờ được đọc"
+   ],
+   "answer": 2,
+   "explain": "LFM-2.6B có ASR 0,00% nhưng 735/1.054 đầu ra không hợp lệ (543 câu văn và 133 cú pháp gọi hàm riêng nằm ở chỗ tên công cụ). Ministral-14B có 263 đầu ra hỏng, 182 là trả lời rỗng, nhưng ASR 0,28%; Spark-4B 0,95%; MiniCPM-2B 0,85%.",
+   "anchors": [
+    {
+     "page": 6,
+     "quote": "has 0.00% ASR but 735 invalid outputs out of 1,054"
+    },
+    {
+     "page": 16,
+     "quote": "LFM-2.6B writes a prose sentence (543) or its native function-call syntax (133) where the tool name belongs"
+    }
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "limit",
+   "q": "Vì sao bài không biết prompt Interdict hay guardrail có làm agent kém hoàn thành việc của người dùng hơn không?",
+   "choices": [
+    "Vì giám khảo LLM chỉ được giao gắn nhãn hành vi với lời chèn, không được giao chấm xem việc của người dùng cuối cùng đã xong hay chưa",
+    "Vì hai prompt này chỉ được chạy ở NF4, mức mà đầu ra không hợp lệ quá nhiều để đo được tỷ lệ hoàn thành việc",
+    "Vì nhóm tác giả bỏ phần kiểm hoàn thành việc của AgentDojo để giữ mọi agent cùng một số lượt tối đa mỗi episode",
+    "Vì các điều kiện prompt chỉ chạy trên InjecAgent, mà InjecAgent không có bước kiểm việc; hoàn thành việc chỉ đo trên AgentDojo"
+   ],
+   "answer": 3,
+   "explain": "Mục giới hạn: hoàn thành việc chỉ đo trên AgentDojo vì InjecAgent không có bước kiểm việc, và các điều kiện prompt chỉ chạy trên InjecAgent, nên ảnh hưởng của chúng tới utility không được đo. Bảng 7 ghi các prompt chạy ở FP16.",
+   "anchors": [
+    {
+     "page": 9,
+     "quote": "Task completion is measured only on AgentDojo, since InjecAgent has no task check."
+    },
+    {
+     "page": 9,
+     "quote": "The policy conditions ran only on InjecAgent, so their effect on utility is not measured."
+    }
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "limit",
+   "q": "Vì sao các kết luận chính dùng bốn nhóm (compliance, refusal, ignored, breakdown) thay vì sáu nhãn của giám khảo?",
+   "choices": [
+    "Vì InjecAgent không phân biệt tấn công thành công một phần với thành công trọn vẹn, nên hai nhãn compliance phải gộp lại mới so được hai benchmark",
+    "Vì hai nhãn Inert khó tách nhất: người và giám khảo khớp 96% ở bốn nhóm nhưng 86% ở sáu nhãn, phần lệch chủ yếu nằm giữa hai nhãn Inert",
+    "Vì giám khảo gắn Mechanical Breakdown quá ít, dưới một phần trăm số trajectory, nên nhãn đó phải gộp với Inert-Unrecognized để đủ mẫu",
+    "Vì nhãn Genuine Refusal cần câu trích nguyên văn, mà phần lớn câu trích không qua được bước kiểm ở lần đầu nên nhãn đó không ổn định"
+   ],
+   "answer": 1,
+   "explain": "Hai nhãn Inert là khó tách nhất nên kết luận chính dùng bốn nhóm. Bảng 8: khớp 96,0% ở bốn nhóm, 86,0% ở sáu nhãn (InjecAgent chỉ 77,33%); phần lệch chủ yếu giữa Inert-U và Inert-R, không ảnh hưởng phép so bỏ qua với từ chối. Câu trích qua kiểm ngay lần đầu là 90,77%, không phải phần nhỏ.",
+   "anchors": [
+    {
+     "page": 9,
+     "quote": "The two Inert labels are the hardest to separate, so our main claims use the four-way grouping."
+    },
+    {
+     "page": 14,
+     "quote": "Most disagreements fall between Inert-Unrecognized and Inert-Recognized"
+    }
+   ]
+  }
+ ]
+}

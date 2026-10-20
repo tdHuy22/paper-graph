@@ -97,7 +97,7 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 [docs/format.md](docs/format.md); bộ đo và đáp án tay ở [docs/bench.md](docs/bench.md).
 
 ```bash
-../pdf-translator/.venv/bin/python bench/prepare.py                      # trích năm bài của bộ đo
+../pdf-translator/.venv/bin/python bench/prepare.py                      # trích bảy bài của bộ đo
 ../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .    # 112 test
 ```
 
