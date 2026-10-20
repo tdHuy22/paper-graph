@@ -72,7 +72,7 @@ bằng `-`). Ba file của một bài nằm chung một thư mục: PDF, `<tên>
 ```bash
 python3 -m paper_graph read <blocks>                  # cả bài; bài dài thì theo đợt
 python3 -m paper_graph read <blocks> --pages 1-5      # 4–6 trang mỗi đợt
-python3 -m paper_graph read <blocks> --find "cụm từ"  # cụm đó ở trang, đoạn nào, kèm câu quanh nó
+python3 -m paper_graph read <blocks> --find "cụm từ"  # cụm đó ở trang, đoạn nào, kèm câu quanh nó; cả trong chữ của bảng
 ```
 
 Email trong bài in thành `[email]` (câu trích đừng chứa nó). Lệnh `read` bị chặn thì dừng và báo người dùng; đừng
@@ -169,13 +169,18 @@ có `label` ngắn cho nhánh phụ ("vì sao được", "đổi lại").
   các điều độc lập bằng `groups`; tách hai nhóm khi có cả điều tác giả tự nhận và điều do bạn suy ra hay người khác
   nêu (meta-review in kèm bài: dùng được, `explain` nói rõ nguồn).
 
+Một ô bằng chứng nối được tới nhiều tuyên bố cùng tầng (một bảng chống đỡ hai tuyên bố): dùng chung ô đó thay vì
+làm hai ô, để tầng không quá 9 ô. Tầng vẫn đầy thì giữ bằng chứng của các tuyên bố ở tóm tắt và kết luận, còn bảng
+phụ (cùng xu hướng, model khác) thì nhắc tên trong `explain` của ô liên quan ("Bảng 7, Bảng 8 cho cùng chiều").
+
 Cạnh chỉ nối các ô cùng tầng: một bằng chứng dùng cho cả `why` lẫn `result` thì làm hai ô, `explain` của ô sau nói
 nó là cùng bảng, hình đó. Thành phần dùng ở nhiều bước (bộ mã hoá dùng cả khi học trước lẫn tinh chỉnh) để ở bước đầu
 tiên dùng nó, `explain` nói nó được dùng lại.
 
 Tầng dưới của `result` quá 9 ô (bài có nhiều nhóm kết quả: hỏi đáp và sinh văn, độ chính xác và tốc độ): tách
-thành hai ô `result` ở tầng đầu, mỗi ô một nhóm, tầng đầu vẫn tối đa 7 ô (đã đủ 7 thì gộp `context` vào `problem` hay
-`why` vào `idea` để lấy chỗ). Đừng gom vào một ô con không có cạnh nào (nó dính PG303, và cả PG305 nếu là `claim`). Còn
+thành hai ô `result` ở tầng đầu, mỗi ô một nhóm. Bài thực nghiệm tự chia kết quả theo vài câu hỏi nghiên cứu ngang
+nhau (RQ1, RQ2, RQ3) thì mỗi câu một ô `result` cũng được, kể cả khi chưa quá 9 ô. Tầng đầu vẫn tối đa 7 ô (đã đủ 7
+thì gộp `context` vào `problem` hay `why` vào `idea` để lấy chỗ). Đừng gom vào một ô con không có cạnh nào (nó dính PG303, và cả PG305 nếu là `claim`). Còn
 thừa thì bỏ tuyên bố phụ ít quan trọng nhất và nêu trong báo cáo.
 
 Đừng thêm cạnh chỉ để tắt cảnh báo ô đứng lẻ (PG303): cạnh nào cũng phải là quan hệ bài nói tới. Danh sách các điều
@@ -189,8 +194,10 @@ thừa thì bỏ tuyên bố phụ ít quan trọng nhất và nêu trong báo c
   `Table 2`). Thuật ngữ đã thành chuẩn (attention, embedding, fine-tuning,
   prompt injection) thì giữ tiếng Anh ngay trong nhãn cũng được.
 - `explain`: câu đầu nói ý chính, thường 1–3 câu (ô tuyên bố có nhiều bằng chứng có thể dài hơn). Giải thích một
-  thuật ngữ bằng việc nó làm, không bằng thuật ngữ khác. Không phóng đại, không thêm điều bài không nói; suy luận của
-  bạn thì ghi `basis: inference` và vẫn neo vào câu làm tiền đề (không neo thì PG208). Điều bạn biết từ ngoài bài
+  thuật ngữ bằng việc nó làm, không bằng thuật ngữ khác. Tên bài tự đặt (nhãn phân loại, tên cấu hình, ký hiệu viết
+  tắt) mà ô nêu ra thì nói luôn mỗi tên nghĩa là gì và khác tên bên cạnh ở đâu: một danh sách tên trơn không giúp
+  người đọc hiểu gì. Không phóng đại, không thêm điều bài không nói; suy luận của bạn thì ghi `basis: inference` và
+  vẫn neo vào câu làm tiền đề (không neo thì PG208). Điều bạn biết từ ngoài bài
   (vd. số của bài khác) không đưa vào ô: nêu trong báo cáo.
 - Cách dịch thuật ngữ: nếu `../pdf-translator/data/user_terms.json` có mục `prefer`, theo đúng lựa chọn của người dùng
   (`keep: true` là giữ tiếng Anh, không thì dùng `vi`). Không có thì tự chọn một cách gọi và giữ nó cho cả sơ đồ.
@@ -204,9 +211,10 @@ với chữ bài của các thành viên và ô cha):
 
 - Viết số lượng bằng chữ số (4 lần, không phải "bốn lần"): số viết bằng chữ tiếng Việt không được kiểm, nên dễ lọt
   sai. "Một" làm mạo từ ("thêm một vector") và số nằm trong thuật ngữ ("hai chiều") thì giữ chữ.
-- Đừng dùng số bạn tự đếm ("kém ở 3 tập", "7 tác vụ"): liệt kê tên ("kém ở ImageNet, COCO"), hay neo câu của bài
-  có đúng số đó. Bảng có nhiều số nhỏ, nên số đếm sai vẫn có thể qua PG220 vì trùng tình cờ: qua bộ kiểm không chứng
-  minh số đếm đúng.
+- PG220 so với cả đoạn chứa câu trích, không chỉ câu trích: ô nêu vài số thì neo vào đoạn có đủ các số đó.
+- Đừng dùng số bạn tự đếm ("kém ở 3 tập", "7 tác vụ", "3 độ chính xác"): liệt kê tên ("kém ở ImageNet, COCO", "FP16,
+  FP8 và NF4"), hay neo câu của bài có đúng số đó. Bảng có nhiều số nhỏ, nên số đếm sai vẫn có thể qua PG220 vì
+  trùng tình cờ: qua bộ kiểm không chứng minh số đếm đúng.
 - Công thức trích ra mất dấu mũ: "10000−2i/d" bị đọc như khoảng 10000 tới 2, nên ô viết số mũ −2 sẽ bị PG220. Viết
   lại không cần dấu âm ("1/10000^(2i/d)") hay tả bằng lời.
 - Tháng viết bằng chữ trong bài ("March 2021"): giữ tên tháng hay bỏ tháng, đừng đổi thành "3/2021" (số 3 không có
@@ -220,6 +228,8 @@ với chữ bài của các thành viên và ô cha):
   nhóm 2, vòng 3, P100, GPT-4, LLaMA3-8B, và mọi dạng chữ-gạch-số như Top-5, ResNet-50. Dãy tên thì lặp từ: "Bảng 1
   tới Bảng 4", "Hình 3 và Hình 4"; viết "Bảng 1–4" hay "Hình 3, 4" thì số sau bị kiểm như số lượng. Khoảng
   "0,30–0,72" là hai số, mỗi số phải có trong bài. Phân vị viết "p95" trong bài thì ô viết "phân vị 95" là khớp.
+  Ngược lại, số nằm trong tên ở bảng (cột "Ruler_128K", hàng "Qwen3-4B") không tính là bài có số 128K hay 4B: ô nói
+  "ở 128K" thì neo thêm câu văn có số đó.
 - Ô suy luận không có neo mà nêu số thì cũng bị báo: số phải có nguồn trong bài.
 
 **Neo** (`anchors`): mỗi ô ít nhất một `{page, quote}`.
@@ -246,10 +256,14 @@ python3 -m paper_graph check papers/<tên>/<tên>.graph.json            # hay th
 python3 -m paper_graph check papers/<tên>/<tên>.graph.json --base papers/<tên>/<tên>.graph.old.json   # dựng lại, sửa
 ```
 
+`fmt` viết lại cả file: sửa sau đó bằng script đọc và ghi JSON, đừng thay chuỗi theo khuôn dòng cũ.
+
 **Mã thoát 0 chưa đủ.** Đạt là 0 lỗi, không còn PG220 (cảnh báo nên không đổi mã thoát), và mỗi cảnh báo còn lại
 (thường PG303 ô đứng lẻ, PG305 tuyên bố thiếu bằng chứng) có lý do nêu trong báo cáo. PG220 không bao giờ là cảnh báo
-có lý do: con số đó bịa, nhầm hay thiếu neo; sửa số hay thêm neo tới khi hết. Đừng thêm `--strict`: nó coi cả cảnh báo
-có lý do là trượt (mã 1). Bảng mã lỗi ở mục "Mã lỗi" của `docs/format.md`. Đọc từng dòng `→` gợi ý: PG201 thường chỉ
+có lý do: con số đó bịa, nhầm hay thiếu neo; sửa số hay thêm neo tới khi hết. PG309 (bảng, biểu đồ đánh số ở phần
+chính của bài mà không ô nào nói tới) là kết quả bị bỏ sót: đưa nó vào ô liên quan, hay ít nhất nhắc tên nó trong
+`explain` của ô đúng chủ đề; chỉ để lại khi bảng không mang kết quả (thiết lập, ví dụ dữ liệu). Đừng thêm
+`--strict`: nó coi cả cảnh báo có lý do là trượt (mã 1). Bảng mã lỗi ở mục "Mã lỗi" của `docs/format.md`. Đọc từng dòng `→` gợi ý: PG201 thường chỉ
 ra trang đúng hay câu gần giống nhất; PG220 nghĩa là một con số không có trong chữ bài mà ô dựa vào (bịa, nhầm, hay
 thiếu neo). Không bao giờ sửa blocks.json hay sửa bộ kiểm để cho qua.
 

@@ -3,7 +3,7 @@
 Ba nhóm mã lỗi:
     PG1xx  dạng file: thiếu trường, sai kiểu, id trùng, cạnh treo, vòng tầng
     PG2xx  neo: câu trích có thật ở đúng trang của đúng bài, đủ dài để không khớp bừa
-    PG3xx  tầng: không quá 9 ô, không ô lẻ loi, tuyên bố có bằng chứng
+    PG3xx  tầng: không quá 9 ô, không ô lẻ loi, tuyên bố có bằng chứng, bảng kết quả có ô nói tới
 
 Neo đạt nghĩa là câu trích có thật ở trang đã ghi. Nó không chứng minh ô diễn giải đúng câu đó: phần ấy cần
 người đọc, hay bước review ở Mốc 2.
@@ -11,6 +11,7 @@ người đọc, hay bước review ở Mốc 2.
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 
+from . import figlinks
 from . import model as m
 from .blocks import Blocks
 from .numbers import missing as missing_numbers
@@ -402,6 +403,7 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
 
     anchors = AnchorChecker(d, blocks, stats)
     sources: dict[str, str] = {}  # chữ bài mà mỗi ô dựa vào: đoạn được neo, chú thích và chữ của hình
+    hits: dict[str, list[str]] = {}  # đoạn chứa câu trích của từng ô, để gắn hình theo chú thích (PG309)
     for n in nodes.values():
         where = f"ô {n.id}"
         if not n.anchors:
@@ -412,7 +414,9 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
                 d.warn("PG208", where, "ô suy luận không neo vào tiền đề nào trong bài")
         if n.figure is not None and blocks is not None and n.figure not in blocks.figures:
             d.err("PG207", where, f"hình {n.figure} không có trong blocks.json")
-        sources[n.id] = _sources(n, anchors.check(where, n.anchors), blocks)
+        hit = anchors.check(where, n.anchors)
+        hits[n.id] = sorted(hit)
+        sources[n.id] = _sources(n, hit, blocks)
         if blocks is not None:
             _numbers(d, where, f"{n.label}\n{n.term}\n{n.explain}", sources[n.id])
     for e in graph.edges:
@@ -427,10 +431,43 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
             # nhãn nhóm tóm các thành viên trong ngữ cảnh ô cha ("Encoder · lặp 6 lần" dựa vào ô method)
             ctx = [sources.get(x, "") for x in g.members] + [sources.get(g.parent, "") if g.parent else ""]
             _numbers(d, f"nhóm {g.id}", g.label, "\n".join(ctx))
+        if nodes:  # sơ đồ rỗng đã có PG301; báo thêm mọi bảng của bài chỉ là nhiễu
+            _unlinked_figures(d, graph, blocks, hits)
     if base is not None:
         _against_base(d, graph, base)
 
     return Report(list(d), stats)
+
+
+_REFERENCE_TITLES = {squash(t) for t in ("References", "Bibliography", "Tài liệu tham khảo")}
+
+
+def _main_text_end(blocks: Blocks) -> tuple[int, float] | None:
+    """(trang, toạ độ y) nơi tài liệu tham khảo bắt đầu; None khi bài không có. Phụ lục nằm sau đó."""
+    starts = [(b.page, b.bbox[1]) for b in blocks.blocks.values()
+              if b.label == "reference_content"
+              or (b.label == "paragraph_title" and squash(b.text.lstrip("0123456789. ")) in _REFERENCE_TITLES)]
+    return min(starts) if starts else None
+
+
+def _unlinked_figures(d: _Diags, graph: m.Graph, blocks: Blocks, hits: dict[str, list[str]]) -> None:
+    """PG309: bảng, biểu đồ ở phần chính của bài (trước tài liệu tham khảo) mà không ô nào nói tới trực tiếp (trường
+    `figure`, câu trích ở chú thích, hay nhắc "Bảng 3" trong ô). Bảng kết quả bị bỏ sót là chỗ sơ đồ thiếu thông tin
+    mà các luật khác không thấy: mọi neo vẫn đúng, chỉ là cả một phần bằng chứng của bài vắng mặt. Chỉ xét vùng có
+    chú thích đánh số ("Table 3", "Figure 2"): vùng không chú thích hay chú thích "(b) …" thường là mảnh của một hình
+    nhiều phần, báo nó chỉ thêm nhiễu."""
+    end = _main_text_end(blocks)
+    _, shown = figlinks.link(graph, blocks, hits)
+    for fid, f in sorted(blocks.figures.items(), key=lambda kv: (kv[1]["page"], kv[1]["bbox"][1], kv[0])):
+        info = shown.get(fid, {})
+        if f["kind"] not in ("table", "chart") or not info.get("label") or info.get("nodes"):
+            continue
+        if end is not None and (f["page"], f["bbox"][1]) >= end:
+            continue
+        d.warn("PG309", f"hình {fid}", f"{info['label']} (tr.{f['page']}) thuộc phần chính của bài mà không ô nào nói "
+               f"tới: «{safe(info['caption'], 90)}»",
+               "đưa kết quả của nó vào ô liên quan (trường `figure`, neo câu chú thích, hay nhắc tên bảng trong giải "
+               "thích); bảng chỉ ghi thiết lập, ví dụ thì có thể để cảnh báo này lại")
 
 
 def _sources(n: m.Node, hit: set[str], blocks: Blocks | None) -> str:

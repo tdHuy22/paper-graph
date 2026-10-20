@@ -30,6 +30,9 @@ def codes(r):
     return sorted({d.code for d in r.diags if d.level == "error"})
 
 
+KNOWN = [("PG309", "hình p9-f1")]  # cảnh báo đã biết của sơ đồ mẫu Attention, xem test_reference_is_clean
+
+
 @unittest.skipIf(load("attention", "blocks") is None, "chưa có blocks của bộ đo: chạy bench/prepare.py")
 class AttentionReference(unittest.TestCase):
     @classmethod
@@ -46,8 +49,10 @@ class AttentionReference(unittest.TestCase):
         return next(n for n in g["nodes"] if n["id"] == nid)
 
     def test_reference_is_clean(self):
+        # PG309 Bảng 3 (thí nghiệm đổi kiến trúc) là chỗ thiếu đã biết của sơ đồ mẫu: giữ nguyên tới khi đo người đọc
+        # thật, vì câu q10 của bộ câu hỏi hỏi đúng bảng đó (docs/do-hieu-bai.md)
         r = run(self.graph, self.blocks)
-        self.assertEqual(r.diags, [], render(r, "attention"))
+        self.assertEqual([(d.code, d.where) for d in r.diags], KNOWN, render(r, "attention"))
         self.assertEqual(r.stats["anchors_ok"], r.stats["anchors"])
 
     def test_sabotage(self):
@@ -73,7 +78,8 @@ class AttentionReference(unittest.TestCase):
 
     def test_changed_number_is_flagged(self):  # TM-7 trên bài thật: số của Bảng 2 nằm trong chữ của vùng bảng
         r = self.mutate(lambda g: self.node(g, "r.table2_bleu").update(label="Bảng 2: BLEU 29,4 Anh–Đức, 41,8 Anh–Pháp"))
-        self.assertEqual([(d.code, d.msg.rsplit(": ", 1)[-1]) for d in r.diags], [("PG220", "29,4")])
+        self.assertEqual([(d.code, d.msg.rsplit(": ", 1)[-1]) for d in r.diags if (d.code, d.where) not in KNOWN],
+                         [("PG220", "29,4")])
 
     def test_unbacked_claim_is_flagged(self):
         r = self.mutate(lambda g: g.update(edges=[e for e in g["edges"] if e["to"] != "r.general"]))

@@ -127,6 +127,19 @@ class Read(unittest.TestCase):  # TM-6
         self.assertIn("2 chỗ trên 1 trang", found)
         self.assertIn("không thấy", reader.find(self.blocks, "tokens at onc"))
 
+    def test_find_searches_table_text(self):  # số của bảng thường chỉ có trong chữ của vùng bảng
+        b = blocks()
+        b["figures"][0]["text"] = "Model BLEU Flat 31.75 Recurrent 3.9\x1b[2K"
+        bl, _ = blocks_mod.parse(b)
+        found = reader.find(bl, "31.75")
+        self.assertIn("không có trong các đoạn; 1 chỗ trong chữ của bảng", found)
+        self.assertIn("[p2-f1 · chữ trong vùng · tr.2]", found)
+        self.assertIn("không thấy", reader.find(bl, "1.75"))  # vẫn cần trọn số ở hai đầu
+        self.assertNotIn("\x1b", reader.find(bl, "3.9"))  # ký tự điều khiển của chữ trong vùng bị thoát
+        b["figures"][0]["kind"] = "image"  # ảnh: chữ OCR trong ảnh không phải số liệu
+        bl, _ = blocks_mod.parse(b)
+        self.assertIn("không thấy", reader.find(bl, "31.75"))
+
 
 if __name__ == "__main__":
     unittest.main()

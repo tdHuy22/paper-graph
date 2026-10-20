@@ -149,6 +149,7 @@ Câu trích có ở nhiều chỗ trên trang (thân bài và chú thích hình)
 | PG306 | cảnh báo | cạnh `supports`/`contradicts` không đi từ `evidence` tới `claim` |
 | PG307 | cảnh báo | bằng chứng không nối tới tuyên bố nào |
 | PG308 | cảnh báo | ô nằm sâu hơn 3 tầng |
+| PG309 | cảnh báo | bảng hay biểu đồ có chú thích đánh số ("Table 3"), nằm trước tài liệu tham khảo, mà không ô nào nói tới (trường `figure`, câu trích ở chú thích, hay nhắc tên nó trong ô) |
 | PG401 | lỗi | (`--base`) ô `locked` của bản cũ bị đổi, bị xoá, hay cạnh giữa hai ô locked, nhóm chứa ô locked bị đổi |
 | PG402 | cảnh báo | (`--base`) ô `accepted` của bản cũ bị đổi |
 

@@ -266,6 +266,34 @@ class Tiers(unittest.TestCase):
             g["edges"].append({"from": "idea", "to": f"x{i}", "kind": "relates"})
         self.assertIn("PG300", codes(run(g), "error"))
 
+    def test_results_figure_nobody_mentions(self):  # PG309: bảng kết quả vắng khỏi sơ đồ
+        g = graph()
+        for nid in ("result", "r.fig"):
+            node(g, nid).pop("figure")
+        node(g, "r.fig")["anchors"] = [{"page": 2, "quote": "with a measured speedup of four times"}]
+        node(g, "r.fig")["label"] = "Đo tốc độ"
+        r = run(g)
+        self.assertEqual([(d.code, d.where) for d in r.diags], [("PG309", "hình p2-f1")], render(r, "toy"))
+        self.assertIn("Hình 1", r.diags[0].msg)
+        self.assertEqual(r.diags[0].level, "warning")
+        node(g, "r.fig")["explain"] = "Hình 1 so thông lượng"  # nhắc tên hình là đủ
+        self.assertEqual(codes(run(g)), [])
+
+    def test_unlinked_figure_rule_skips_appendix_and_panels(self):
+        g = graph()
+        for nid in ("result", "r.fig"):
+            node(g, nid).pop("figure")
+        node(g, "r.fig")["anchors"] = [{"page": 2, "quote": "with a measured speedup of four times"}]
+        node(g, "r.fig")["label"] = "Đo tốc độ"
+        b = blocks()
+        cap = next(x for x in b["blocks"] if x["id"] == "p2-b3")
+        cap["text"] = "(b) Throughput of the flat widget compared with recurrent widgets."  # mảnh của hình nhiều phần
+        self.assertEqual(codes(run(g, b)), [])
+        b = blocks()
+        b["blocks"].append({"id": "p2-b6", "page": 2, "bbox": [72, 400, 540, 410], "label": "paragraph_title",
+                            "text": "References"})  # hình nằm sau tài liệu tham khảo: phụ lục
+        self.assertEqual(codes(run(g, b)), [])
+
     def test_empty_graph(self):
         g = graph()
         g["nodes"], g["edges"] = [], []

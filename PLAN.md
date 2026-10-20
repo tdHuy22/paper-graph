@@ -297,7 +297,21 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
    1/3; Ignored 14/14, tầng 100%, quan hệ 57%, soi 2/4. Cổng chốt việc (rủi ro vừa, reviewer sonnet): 0 đáp án sai,
    1 vừa (neo `method` quá hẹp, đã sửa), 3 thấp (test quiz thiếu hai bài, docs "năm bài" và nguồn PDF, lời giải thích
    lệch nhẹ), sửa cả 4. 228 test đạt (biên nhận). Chi tiết: `docs/do-hieu-bai.md` "Lượt 2". Đã commit (bạn bảo "commit đi", 2026-10-20).
-   Phát hiện phụ: `read --find` không tìm trong chữ của vùng bảng.
+   Phát hiện phụ: `read --find` không tìm trong chữ của vùng bảng. (Đã sửa ở mục 9.)
+9. **Cải tiến pipeline, đợt 1** (2026-10-20, bạn bảo "vẫn chưa cải thiện pipeline xong"; đã commit, bạn bảo "commit đợt 1").
+   - `read --find` tìm cả trong chữ của vùng bảng, biểu đồ, in rõ là không làm câu trích được (`reader._figure_hits`).
+   - Luật mới PG309 (cảnh báo): bảng, biểu đồ có chú thích đánh số, nằm trước tài liệu tham khảo, mà không ô nào nói
+     tới (`check._unlinked_figures`, dùng `figlinks.link`). Trên các sơ đồ cũ: Attention báo Bảng 3 (đúng chỗ thiếu q10
+     của lượt đo), RAG Hình 3, Prism Hình 6, RoFormer lượt 4 Bảng 3, DataSentinel Hình 3–5; Ignored không báo. Sơ đồ mẫu
+     Attention giữ nguyên tới khi đo người thật (test `KNOWN`).
+   - SKILL.md theo góp ý của hai agent dựng lượt 8: mỗi RQ một ô `result`; một ô bằng chứng nối nhiều tuyên bố cùng
+     tầng; tầng đầy thì nhắc tên bảng phụ trong `explain`; PG220 so cả đoạn được neo; liệt kê tên thay số đếm; số trong
+     tên cột bảng không tính; `fmt` viết lại file; PG309. Thêm một câu rút từ lượt đo (tên bài tự đặt phải nói nghĩa):
+     từ nay Prism và Ignored đã dùng để sửa skill, đo skill mới cần bài mới.
+   - Test: 3 test mới (PG309 hai ca, `find` trong bảng); 231 test đạt trên hai Python (biên nhận; một lần chạy trước đó
+     chết lúc tắt mã -6, lỗi onnxruntime đã biết, chạy lại đạt).
+   - Còn trong danh sách cải tiến: `build` dựng theo từng tầng (lớn, cần kế hoạch); chặn cứng lệnh mạng cho agent dựng
+     (`permissions.deny`, cần bạn duyệt vì đổi cấu hình).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 

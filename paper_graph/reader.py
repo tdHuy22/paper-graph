@@ -6,7 +6,7 @@ không lẫn với lời của người dùng, và ký tự điều khiển đư
 import re
 
 from .blocks import Blocks
-from .text import safe, squash
+from .text import safe, squash, squash_index
 
 # Email tác giả ở trang đầu: không cần cho sơ đồ, là dữ liệu cá nhân, và làm bộ phân loại của auto mode chặn cả lệnh
 # `read` (agent khi đó tự đọc blocks.json bằng script, ra ngoài các việc skill cho phép). In thay bằng [email].
@@ -119,15 +119,43 @@ def _formula_line(f: dict) -> str:
 
 
 def find(blocks: Blocks, phrase: str) -> str:
-    """Những chỗ cụm từ xuất hiện (khớp như câu trích: bỏ qua hoa thường, dấu câu, ngắt dòng)."""
+    """Những chỗ cụm từ xuất hiện (khớp như câu trích: bỏ qua hoa thường, dấu câu, ngắt dòng): trong các đoạn, rồi
+    trong chữ của vùng bảng, biểu đồ (số liệu của bảng thường chỉ có ở đó)."""
     q = squash(phrase)
     if not q:
         return "cụm cần tìm rỗng sau khi chuẩn hoá"
     hits = blocks.find_anywhere(q)
-    if not hits:
+    in_figs = _figure_hits(blocks, q)
+    if not hits and not in_figs:
         return f"«{safe(phrase, 120)}»: không thấy (cần trọn từ, trọn số ở hai đầu)"
     rows = [h for p in sorted({h.page for h in hits}) for h in blocks.find_all(q, p)]
-    lines = [f"«{safe(phrase, 120)}»: {len(rows)} chỗ trên {len(hits)} trang"]
+    where = f"{len(rows)} chỗ trên {len(hits)} trang" if rows else "không có trong các đoạn"
+    head = f"«{safe(phrase, 120)}»: {where}"
+    if in_figs:
+        head += f"; {len(in_figs)} chỗ trong chữ của bảng, biểu đồ (dùng để tìm số, không làm câu trích được: neo vào " \
+                "câu văn hay chú thích, gắn bảng bằng trường `figure`)"
+    lines = [head]
     lines += [f"[{', '.join(h.blocks)} · tr.{h.page}] …{_flat(h.before, 120)}{' ' * h.before[-1:].isspace()}"
               f"«{_flat(h.snippet, 200)}»{' ' * h.after[:1].isspace()}{_flat(h.after, 120)}…" for h in rows]
+    lines += [f"[{fid} · chữ trong vùng · tr.{page}] …{_flat(before, 120)} «{_flat(snippet, 200)}» {_flat(after, 120)}…"
+              for fid, page, before, snippet, after in in_figs]
     return "\n".join(lines)
+
+
+def _figure_hits(blocks: Blocks, q: str, per_figure: int = 5) -> list[tuple]:
+    """Chỗ khớp trong chữ của vùng bảng, biểu đồ (cùng luật ranh giới từ và số như `Blocks.find_all`)."""
+    out = []
+    for fid, f in sorted(blocks.figures.items(), key=lambda kv: (kv[1]["page"], kv[0])):
+        raw = f.get("text")
+        if f["kind"] not in ("table", "chart") or not raw or not isinstance(raw, str):
+            continue
+        s, where, brk = squash_index(raw)
+        at, n = s.find(q), 0
+        while at >= 0 and n < per_figure:
+            end = at + len(q)
+            if (at == 0 or brk[at]) and (end == len(s) or brk[end]):
+                a, z = where[at], where[end - 1] + 1
+                out.append((fid, f["page"], raw[max(0, a - 60):a], raw[a:z], raw[z:z + 60]))
+                n += 1
+            at = s.find(q, at + 1)
+    return out

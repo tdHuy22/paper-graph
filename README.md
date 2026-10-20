@@ -36,7 +36,7 @@ python3 -m paper_graph check bai.graph.json --pdf bai.pdf --json --strict
 
 # Đọc bài theo trang, mỗi đoạn kèm id, để chép câu trích; tìm một cụm ở trang nào
 python3 -m paper_graph read bai.blocks.json --pages 1-5
-python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"
+python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"     # tìm cả trong chữ của bảng
 ../pdf-translator/.venv/bin/python -m paper_graph figure bai.blocks.json p8-f1   # cắt hình ra bai.figures/p8-f1.png
 ../pdf-translator/.venv/bin/python -m paper_graph view bai.graph.json            # trình xem bai.html, chạy offline
 ../pdf-translator/.venv/bin/python -m paper_graph serve bai.graph.json           # trình xem có chế độ sửa, http://127.0.0.1:8742/
