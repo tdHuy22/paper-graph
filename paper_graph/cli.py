@@ -372,8 +372,8 @@ def main(argv=None) -> int:
                         "trong một câu trả lời (cách cũ, giữ để so)")
     u.add_argument("--rounds", type=int, default=3,
                    help="số lượt sửa theo lỗi của check, cho mỗi phần (tiers) hay cả sơ đồ (one-shot); mặc định 3")
-    u.add_argument("--max-calls", type=int, default=16,
-                   help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 16, tối đa 40)")
+    u.add_argument("--max-calls", type=int, default=24,
+                   help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 24, tối đa 40)")
     u.add_argument("--max-usd", type=float, default=0.5, help="trần tiền cho cả lần chạy (mặc định 0,5 USD)")
     u.add_argument("--force", action="store_true", help="dựng lại khi đã có graph.json (ô khoá phải giữ nguyên)")
     u.add_argument("--allow-training", action="store_true",

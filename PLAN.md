@@ -330,6 +330,29 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     Tiêu chí đặt trước chưa đạt (thua ở Prism). Phát hiện: sơ đồ không dày hơn (21–24 ô) vì model chỉ đánh dấu 2–3 ô
     cần mở, không phải vì câu trả lời quá dài. Trang kế hoạch ghi kết quả. Còn treo (@ban): thử tiếp bản chương trình
     tự mở mọi ô tầng đầu (trừ vấn đề), hay dừng và để one-shot làm mặc định; đã commit (bạn bảo "commit đợt này").
+12. **Đang dở: tiers v2, chương trình tự mở mọi ô tầng đầu trừ ô vấn đề** (2026-10-20, bạn bảo; code chưa commit).
+    Code: `run_tiers` chọn ô mở ở tầng đầu (`kind != problem`), `expand` của model chỉ còn cho tầng sâu hơn; 2 test mới,
+    đột biến làm đỏ; 248 test đạt hai Python (biên nhận). Tài khoản OpenRouter đã nạp 10 USD nên model free được 1.000
+    lượt/ngày (bạn nói 2026-10-20). Đo (`.tmp/build/2026-10-21-tiers2/`, Nemotron free, `--max-calls 16`): RAG 35 ô, phủ
+    12/14, tầng 79%, quan hệ 80%, soi 0/4 (chạm trần 16 lượt); DataSentinel 35 ô, phủ 12/13, tầng 92%, quan hệ 60%, soi 0/2
+    (dừng vì OpenRouter 504); Prism lần 3 (21/10) chạy được: 37 ô, phủ 13/13, tầng 100%, quan hệ 100%, soi 0/3, đủ thông tin 8/12 (v1 5, một lượt 6, skill 11); hai lần trước hỏng ở lượt khung (504). Nhận xét sơ bộ: sơ đồ dày
+    hơn (35 ô so với 24 của tiers v1, 20–21 của one-shot) nhưng độ phủ không tăng (v1: 14/14, 13/13). Mốc so: one-shot
+    ngày 20/10 ở `.tmp/build/2026-10-20/oneshot/`, tiers v1 ở `.tmp/build/2026-10-20/tiers/`, bảng ở docs/bench.md mục
+    cuối. Tiếp: chạy lại Prism lúc nhà cung cấp bớt tải (`python3 -m paper_graph build .tmp/build/2026-10-21-tiers2/prism/prism.blocks.json --allow-training --mode tiers --max-calls 16`), chấm (`score`, rồi agent Sonnet chỉ đọc sơ đồ làm 12 câu của `prism.quiz.json` như mục
+    11, câu hỏi ở `.tmp/do-hieu-bai/2026-10-20-build/prism.questions.md`), ghi bảng v2 vào docs/bench.md, hỏi bạn chọn
+    mặc định (one-shot, tiers v1 hay v2) rồi commit.
+13. **Lượt đối chiếu chỗ bài tự lệch: xong, tác dụng nhỏ** (2026-10-21, bạn bảo "tiếp tục cải thiện"; chưa commit).
+    Code: `build.py` `AUDIT_TASK`, `_add` (dùng chung cho lượt soát và đối chiếu, có 1 lượt sửa cho phần thêm còn lỗi),
+    `_checked`; `run_tiers` chạy đối chiếu cuối cùng khi sơ đồ 0 lỗi. Test `Audit` (ô chỗ lệch có thật được giữ, ô bịa số
+    được gửi lại sửa rồi bỏ). Đo riêng trên 3 sơ đồ v2: 1 ô đúng (Prism, 3,4× chỉ ở batch 16), soi vẫn 0/4, 0/2, 0/3
+    (điểm soi Prism đòi thêm số 1,15×); docs/bench.md mục cuối. Còn treo (@ban): chọn mặc định của `build` (v2 hay
+    one-shot), commit v2 + đối chiếu.
+14. **Lần đo chốt: đạt tiêu chí, đã commit** (2026-10-21, bạn bảo "làm cho đạt tiêu chí rồi mới commit"). Đổi:
+    `MAX_CALLS`/`--max-calls` mặc định 24, `_add` 2 lượt sửa, lời dặn đối chiếu nêu cả số ở điều kiện kia. Một lần chạy
+    mỗi bài (`.tmp/build/2026-10-21-final/`): phủ RAG 14/14, DataSentinel 12/13, Prism 13/13 so với one-shot 12/14, 11/13,
+    13/13; soi ngang (0/4, 1/2, 0/3). Tiêu chí đặt trước đạt; giới hạn và chi phí (15–18 lượt mỗi bài) ở docs/bench.md mục
+    cuối. 249 test đạt (biên nhận). Tiers giữ làm mặc định. Còn mở: điểm soi model free vẫn thấp (phần thêm của lượt đối
+    chiếu thường còn lỗi neo).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -411,3 +434,12 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Chế độ "đoán trước rồi mở": ẩn tầng dưới, người đọc ghi dự đoán, rồi so.
 - [x] Đo hiểu bài: vài câu hỏi mỗi bài, so đọc chữ với đọc qua sơ đồ. (công cụ, câu hỏi, quy trình)
 - [ ] Chạy phép đo với người đọc thật theo `docs/do-hieu-bai.md`, ghi kết quả @ban
+
+### Mốc 6: cải thiện pipeline (từ 2026-10-19)
+
+- [x] Phép đo hiểu bài thay bằng model; thêm hai bài ra sau mốc dữ liệu (Prism, Ignored) vào bộ đo. (`7e6c427`, `4e70365`)
+- [x] Luật PG309 cho bảng kết quả bị bỏ sót; `read --find` tìm cả chữ trong bảng; SKILL.md theo góp ý agent dựng. (`2f3d14a`)
+- [x] `build --mode tiers`: dựng từng tầng, giữ one-shot để so. (`3da16cc`)
+- [x] `build` theo tầng đạt tiêu chí so với one-shot trên RAG, DataSentinel, Prism (v2 tự mở ô tầng đầu, lượt đối chiếu; lần đo chốt 21/10)
+- [ ] Chặn cứng lệnh mạng cho agent dựng sơ đồ (`permissions.deny` trong `.claude/settings.json`) @ban
+- [ ] Bài mới thứ ba cho bộ đo skill: Prism và Ignored đã dùng để sửa skill ngày 20/10, đo skill mới cần bài chưa dùng

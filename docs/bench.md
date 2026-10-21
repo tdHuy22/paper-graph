@@ -238,3 +238,57 @@ So: skill trong Claude Code trên Prism (lượt 8) ra 48 ô, phủ 13/13, đủ
 - Cả hai cách bằng model free đều chỉ đủ cho khoảng nửa số câu (5–6 trên 12) trên Prism, so với 11 của skill.
 - Cái tiers chắc chắn được: mỗi câu trả lời nhỏ (lớn nhất 10 ô), phần hỏng chỉ làm lại phần đó (khung RAG sửa 1 lượt,
   nhánh `result` 12 lỗi sửa 1 lượt), không bị cắt. Đổi lại tốn 7–12 lượt mỗi bài thay vì 4.
+
+### Tiers v2: chương trình tự mở mọi ô tầng đầu trừ ô vấn đề (2026-10-20, tối)
+
+Cùng model, `--max-calls 16`, sơ đồ ở `.tmp/build/2026-10-21-tiers2/`. Mốc so là bảng trên (cùng chỉ dẫn).
+
+| Bài | Lượt | Ô (ô có con) | Phủ | Đúng tầng | Quan hệ | Soi | Ghi chú |
+|---|---|---|---|---|---|---|---|
+| RAG | 16, chạm trần | 35 (4) | 12/14 | 79% | 80% | 0/4 | nhánh `result` sửa 3 lượt vẫn còn PG220 |
+| DataSentinel | 11 | 35 (5) | 12/13 | 92% | 60% | 0/2 | dừng vì OpenRouter 504 ở lượt sửa nhánh `context` |
+| Prism | 13 | 37 (5) | 13/13 | 100% | 100% | 0/3 | lần chạy thứ ba (21/10); hai lần trước hỏng ở lượt khung vì 504. Đủ thông tin: 8/12 |
+
+- Sơ đồ dày hơn rõ (35 ô so với 24 của v1 và 20–21 của một lượt) nhưng độ phủ không tăng: RAG 12/14 (v1 14/14), DataSentinel
+  12/13 (v1 13/13), quan hệ và điểm soi thấp hơn v1. Thêm nhánh (`idea`, `why`, `context`) cho thêm ô mà không thêm ý
+  của đáp án, và tốn lượt (RAG chạm trần trước khi mở xong).
+- Prism v2: phủ 13/13 (v1 11/13, một lượt 13/13), đủ thông tin 8/12 (v1 5, một lượt 6, skill 11): nhánh `idea` và `why`
+  mới mang được Hình 8 (ρ) và câu lớp proposal attend top-κ của chính nó.
+- Theo tiêu chí đặt trước, so với một lượt: v2 không thua độ phủ ở bài nào và đạt 80% cả ba bài, nhưng chỉ hơn ở 1 bài
+  (DataSentinel 12/13 so với 11/13), điểm soi DataSentinel thấp hơn (0/2 so với 1/2): chưa đạt. v1 cũng chưa đạt (thua
+  ở Prism). Mỗi ô một lần chạy, nên chênh 1–2 ý nằm trong mức dao động.
+
+### Lượt đối chiếu chỗ bài tự lệch (2026-10-21)
+
+`AUDIT_TASK` chạy riêng trên 3 sơ đồ tiers v2 ở trên (`.tmp/build/2026-10-21-audit/run.py`, cùng model), để đo đúng
+tác dụng của nó. Lần đầu (không có lượt sửa): 0 ô được nhận; model đề xuất chỗ lệch ở DataSentinel và Prism nhưng
+phần thêm còn 3 lỗi mỗi bài nên bị bỏ. Thêm một lượt sửa cho phần thêm còn lỗi (`_add`, `fixes=1`), chạy lại:
+
+| Bài | Ô thêm | Soi trước → sau | Ghi chú |
+|---|---|---|---|
+| RAG | 0 | 0/4 → 0/4 | model không đề xuất chỗ lệch nào |
+| DataSentinel | 0 | 0/2 → 0/2 | phần thêm vẫn còn 2 lỗi sau lượt sửa, bị bỏ |
+| Prism | 1 | 0/3 → 0/3 | ô "Chỗ lệch: 3,4× ở 128K không nêu điều kiện batch", nối `contradicts` (moderate) tới ô tuyên bố tốc độ: đúng chỗ lệch của điểm soi `speedup_bsz16`, nhưng không nêu số 1,15× ở batch 1 mà điểm soi đòi, nên chưa tính |
+
+- Tác dụng nhỏ: 1 ô đúng trên 3 bài, điểm soi không đổi, độ phủ và các chỉ số khác giữ nguyên, không lỗi mới. Mỗi bài
+  tốn thêm 1–2 lượt. Không sửa điểm soi cho khớp ô này (đáp án viết trước, đổi sau khi thấy kết quả là chỉnh đề).
+
+### Lần đo chốt (2026-10-21, ghi trước khi chạy)
+
+Code cuối: tiers v2 (tự mở mọi ô tầng đầu trừ ô vấn đề), lượt soát và lượt đối chiếu có 2 lượt sửa cho phần thêm,
+`--max-calls 24` (mặc định mới). Mỗi bài đúng một lần chạy (`.tmp/build/2026-10-21-final/`), so với một lượt ngày 20/10
+theo đúng tiêu chí ở trên. Không chạy lại để tìm lần đạt: lần chạy hỏng vì lỗi API (504) thì được chạy lại, và ghi rõ.
+
+
+| Bài | Lượt | Ô | Phủ (một lượt) | Đúng tầng (một lượt) | Quan hệ (một lượt) | Soi (một lượt) |
+|---|---|---|---|---|---|---|
+| RAG | 18 | 45 | 14/14 (12/14) | 93% (86%) | 100% (100%) | 0/4 (0/4) |
+| DataSentinel | 17 | 61 | 12/13 (11/13) | 92% (85%) | 60% (60%) | 1/2 (1/2) |
+| Prism | 15 | 40 | 13/13 (13/13) | 92% (92%) | 100% (100%) | 0/3 (0/3) |
+
+- **Đạt tiêu chí**: độ phủ không thấp hơn ở bài nào, từ 80% trở lên ở cả 3 bài, hơn ở RAG và DataSentinel. Không lần
+  chạy nào hỏng, không chạy lại. Điểm soi ngang cách cũ: lượt đối chiếu chỉ được nhận 1 ô (DataSentinel); các phần thêm
+  khác vẫn còn lỗi sau 2 lượt sửa và bị bỏ.
+- Giới hạn: mỗi bài một lần chạy, nên lợi thế 1–2 ý vẫn nằm trong mức dao động đã thấy (BERT 17/10). Đổi lại: 15–18
+  lượt mỗi bài thay vì 4, chạy khoảng 20 phút mỗi bài thay vì 5. `build` giữ `--mode tiers` làm mặc định, `--mode
+  one-shot` vẫn còn.

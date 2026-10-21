@@ -147,7 +147,8 @@ def _sections(md: str, keep: list[str]) -> str:
 
 
 TIERS_HOW = (
-    "Sơ đồ được dựng từng tầng một, qua nhiều tin nhắn: tin đầu xin tầng đầu, mỗi tin sau xin tầng dưới của một ô. "
+    "Sơ đồ được dựng từng tầng một, qua nhiều tin nhắn: tin đầu xin tầng đầu, mỗi tin sau xin tầng dưới của một ô "
+    "(chương trình mở mọi ô tầng đầu trừ ô vấn đề; tầng sâu hơn thì mở theo `expand` của bạn). "
     "Mỗi lần chỉ trả đúng phần được xin, bằng một object JSON {\"nodes\": [...], \"edges\": [...], \"groups\": "
     "[...], \"expand\": [...]} theo định dạng ô, cạnh, nhóm của graph.json, không kèm chữ nào khác. `expand` là "
     "danh sách id ô vừa dựng cần mở tầng dưới (theo mục \"Tầng dưới\": chỉ ô có từ 2 ô con đáng mở). Mọi ô để "
@@ -528,7 +529,8 @@ def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, ke
 
 
 REVIEW_CODES = ("PG305", "PG309")  # tuyên bố thiếu bằng chứng, bảng kết quả không ô nào nói tới: lượt soát thêm ô
-MAX_CALLS = 16  # trần số lượt gọi mặc định của chế độ theo tầng (TM-27); cờ `--max-calls` tối đa 40
+MAX_CALLS = 24  # trần số lượt gọi mặc định của chế độ theo tầng (TM-27); cờ `--max-calls` tối đa 40. Đo 2026-10-21:
+# một bài cần 13–20 lượt để chạy đủ khung, mở 5–6 ô, lượt soát và lượt đối chiếu (16 làm RAG dừng trước lượt soát)
 MAX_EXPAND_DEPTH = 2  # mở tới tầng thứ 3 (tầng đầu là 0): đúng độ sâu tối đa của bộ kiểm
 _FIELDS = ("id", "parent", "kind", "label", "term", "explain")
 
@@ -612,12 +614,87 @@ def _touches(diag, ids: set[str], gids: set[str], parent: str | None) -> bool:
     return w == ("tầng đầu" if parent is None else f"tầng dưới của {parent}")
 
 
+AUDIT_TASK = (
+    "Đọc lại tóm tắt, mở đầu và kết luận của bài. Với từng tuyên bố có số hay phạm vi (\"nhanh 3 lần\", \"trên mọi "
+    "tập\", \"không giảm độ chính xác\"), đối chiếu với bảng, hình và phần thí nghiệm của bài. Chỗ nào chữ và bảng lệch "
+    "nhau (số khác, điều kiện bị bỏ như batch hay độ dài, phạm vi rộng hơn bằng chứng, một cột của bảng ngược với chữ), "
+    "thêm một ô `kind: evidence` dưới ô cha có tuyên bố đó (thường là ô kết quả): `explain` mở đầu bằng \"Chỗ lệch:\", "
+    "nêu cả hai phía kèm số của mỗi phía (chữ bỏ điều kiện thì nêu cả số ở điều kiện kia, ví dụ batch khác hay tập khác), "
+    "neo vào cả hai chỗ trong bài; nếu tầng đó có ô tuyên bố nói đúng điều bị lệch "
+    "thì nối cạnh `contradicts` từ ô mới tới nó, `strength` theo mức. Không thấy chỗ lệch nào chắc chắn thì trả "
+    "additions rỗng: đừng bịa.")
+
+
+def _checked(job: _Job, doc: dict):
+    g = _force(doc, job.title, job.bl.sha256, job.name, job.base)
+    graph, diags = parse_graph(g)
+    return g, check(graph, job.bl, None, diags, base=job.base_graph)
+
+
+def _add(job: _Job, res: Result, merged: dict, intro: str, label: str, what: str, say: Callable[[str], None],
+         fixes: int = 2) -> dict:
+    """Một lượt thêm ô vào các tầng có sẵn (lượt soát, lượt đối chiếu); phần thêm nào còn lỗi hay PG220 thì gửi lỗi
+    lại tối đa `fixes` lượt, sau đó vẫn lỗi thì bỏ. Trả sơ đồ sau khi thêm."""
+    task = (intro + "\n\nTrả {\"additions\": [{\"parent\": \"<id ô cha có sẵn>\", \"nodes\": [...], \"edges\": "
+            "[...]}]}. Cạnh chỉ nối các ô cùng ô cha (ô mới với ô mới hay với ô có sẵn ở tầng đó). Không viết lại ô "
+            "đã có; id mới không trùng id nào trong sơ đồ.")
+    messages = job.head + [{"role": "user", "content": _built(merged)}, {"role": "user", "content": task}]
+    kept = 0
+    for k in range(fixes + 1):
+        name = label if k == 0 else f"{label}, sửa {k}"
+        try:
+            content, _, _ = job.caller.ask(messages, name)
+        except (_Stop, BuildError) as e:
+            if k == 0:
+                raise
+            res.log.append(f"{name}: {e}; giữ các phần đã nhận")  # phần nhận ở lượt trước không mất
+            say(res.log[-1])
+            break
+        res.rounds += 1
+        res.cost = job.caller.cost
+        raw = _json_of(content)
+        adds = raw.get("additions") if isinstance(raw, dict) else None
+        rejected = []  # (phần thêm như model trả, các dòng lỗi)
+        for a in (adds if isinstance(adds, list) else [])[:9]:
+            parent = a.get("parent") if isinstance(a, dict) else None
+            ids_now = {n["id"] for n in merged["nodes"]}
+            if not isinstance(parent, str) or parent not in ids_now or _depth(merged, parent) >= MAX_EXPAND_DEPTH:
+                continue  # ô cha phải có sẵn, và tầng thêm vào không sâu quá 3 (TM-27)
+            taken = ids_now | {g.get("id") for g in merged["groups"]}
+            siblings = frozenset(n["id"] for n in merged["nodes"] if n.get("parent") == parent)
+            part = _part({"nodes": a.get("nodes"), "edges": a.get("edges")}, parent, taken, say, name, siblings)
+            new = {n["id"] for n in part["nodes"]}
+            if not new:
+                continue
+            _, r = _checked(job, _merge(merged, part))
+            bad = [d for d in r.diags if (d.level == "error" or d.code == "PG220") and _touches(d, new, set(), parent)]
+            if bad:
+                res.log.append(f"{name}: phần thêm dưới {parent} còn {len(bad)} lỗi")
+                say(res.log[-1])
+                rejected.append((a, Report(bad, r.stats)))
+                continue
+            merged = _merge(merged, part)
+            kept += len(new)
+        if not rejected or k == fixes:
+            break
+        note = ("Các phần thêm dưới đây còn lỗi của bộ kiểm nên chưa được nhận. Sửa đúng các lỗi đó (chép câu trích "
+                "nguyên văn từ bài, mỗi số trong ô phải có trong đoạn được neo) rồi trả lại chỉ các phần này, cùng định "
+                "dạng {\"additions\": [...]}.\n\n"
+                + "\n\n".join(f"Phần thêm dưới ô {a['parent']}:\n" + render(rp, job.title) for a, rp in rejected))
+        messages = job.head + [{"role": "user", "content": _built(merged)}, {"role": "user", "content": task},
+                               {"role": "assistant", "content": content[:6000]}, {"role": "user", "content": note}]
+    res.log.append(f"{label}: " + (f"{what}, " if what else "") + f"thêm {kept} ô, tiền tới giờ {res.cost:.3f} USD")
+    say(res.log[-1])
+    return merged
+
+
 def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, key: str | None = None,
               post: Post | None = None, prices: tuple[float, float] | ModelInfo | None = None,
               base: dict | None = None, say: Callable[[str], None] = print, allow_training: bool = False,
               max_calls: int = MAX_CALLS) -> Result:
-    """Dựng từng tầng một (chế độ mặc định): lượt khung xin tầng đầu, mỗi ô trong `expand` có một lượt xin tầng dưới
-    của nó (tới độ sâu 3), mỗi phần được kiểm và sửa riêng tối đa `rounds` lượt. Phần còn lỗi sau các lượt sửa thì bỏ
+    """Dựng từng tầng một (chế độ mặc định): lượt khung xin tầng đầu, mỗi ô tầng đầu trừ ô vấn đề có một lượt xin tầng
+    dưới của nó, ô con trong `expand` của lượt đó được mở tiếp (tới độ sâu 3), mỗi phần được kiểm và sửa riêng tối đa
+    `rounds` lượt; cuối cùng lượt soát (PG305, PG309) và lượt đối chiếu chỗ bài tự lệch. Phần còn lỗi sau các lượt sửa thì bỏ
     (ghi log) để phần đã đạt không bị kéo theo; khung còn lỗi thì dừng. Mỗi câu trả lời chỉ chứa một tầng (tối đa 9
     ô) nên ngắn, không bị cắt như khi xin cả sơ đồ. Không ghi file."""
     job = _prepare(blocks_path, model, max_usd, key, post, prices, base, say, allow_training, tiers=True,
@@ -628,9 +705,11 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
     res = Result()
 
     def checked(doc: dict):
-        g = _force(doc, title, bl.sha256, job.name, base)
-        graph, diags = parse_graph(g)
-        return g, check(graph, bl, None, diags, base=job.base_graph)
+        return _checked(job, doc)
+
+    def add(intro: str, label: str, what: str) -> None:
+        nonlocal merged
+        merged = _add(job, res, merged, intro, label, what, say)
 
     stopped: list[Exception] = []  # trần hay lỗi API giữa một phần: phần đó trả bản tốt nhất, rồi vòng ngoài dừng
 
@@ -694,41 +773,15 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
         return (best[2], False) if best is not None else (None, False)
 
     def review(gaps: list, stats: dict) -> None:
-        """Lượt soát: một lượt, không sửa lại; phần thêm nào còn lỗi hay PG220 thì bỏ."""
-        nonlocal merged
-        task = ("Bộ kiểm báo các chỗ sơ đồ còn thiếu dưới đây. Với chỗ đáng thêm, thêm ô vào đúng tầng của ô cha có "
-                "sẵn: trả {\"additions\": [{\"parent\": \"<id ô cha có sẵn>\", \"nodes\": [...], \"edges\": [...]}]}. "
-                "Cạnh chỉ nối các ô cùng ô cha (ô mới với ô mới hay với ô có sẵn ở tầng đó). Bảng chỉ ghi thiết lập, "
-                "ví dụ thì bỏ qua. Không viết lại ô đã có; id mới không trùng id nào trong sơ đồ.\n\n"
-                + render(Report(gaps, stats), title))
-        messages = job.head + [{"role": "user", "content": _built(merged)}, {"role": "user", "content": task}]
-        content, _, _ = caller.ask(messages, "soát")
-        res.rounds += 1
-        res.cost = caller.cost
-        raw = _json_of(content)
-        adds = raw.get("additions") if isinstance(raw, dict) else None
-        kept = 0
-        for a in (adds if isinstance(adds, list) else [])[:9]:
-            parent = a.get("parent") if isinstance(a, dict) else None
-            ids_now = {n["id"] for n in merged["nodes"]}
-            if not isinstance(parent, str) or parent not in ids_now or _depth(merged, parent) >= MAX_EXPAND_DEPTH:
-                continue  # ô cha phải có sẵn, và tầng thêm vào không sâu quá 3 (TM-27)
-            taken = ids_now | {g.get("id") for g in merged["groups"]}
-            siblings = frozenset(n["id"] for n in merged["nodes"] if n.get("parent") == parent)
-            part = _part({"nodes": a.get("nodes"), "edges": a.get("edges")}, parent, taken, say, "soát", siblings)
-            new = {n["id"] for n in part["nodes"]}
-            if not new:
-                continue
-            _, r = checked(_merge(merged, part))
-            bad = [d for d in r.diags if (d.level == "error" or d.code == "PG220") and _touches(d, new, set(), parent)]
-            if bad:
-                res.log.append(f"soát: bỏ phần thêm dưới {parent} ({len(bad)} lỗi)")
-                say(res.log[-1])
-                continue
-            merged = _merge(merged, part)
-            kept += len(new)
-        res.log.append(f"soát: {len(gaps)} chỗ thiếu, thêm {kept} ô, tiền tới giờ {res.cost:.3f} USD")
-        say(res.log[-1])
+        """Lượt soát: thêm ô cho chỗ thiếu mà bộ kiểm báo (tuyên bố thiếu bằng chứng, bảng không ô nào nói tới)."""
+        add("Bộ kiểm báo các chỗ sơ đồ còn thiếu dưới đây. Với chỗ đáng thêm, thêm ô vào đúng tầng của ô cha có "
+            "sẵn. Bảng chỉ ghi thiết lập, ví dụ thì bỏ qua.\n\n" + render(Report(gaps, stats), title), "soát",
+            f"{len(gaps)} chỗ thiếu")
+
+    def audit() -> None:
+        """Lượt đối chiếu: tìm chỗ bài tự lệch (tóm tắt nói khác bảng), thứ model free chưa bao giờ đưa vào sơ đồ khi
+        chỉ được xin dựng từng tầng (điểm soi 0 ở cả 6 sơ đồ đo ngày 20/10)."""
+        add(AUDIT_TASK, "đối chiếu", "")
 
     def need(parent: str | None) -> str:
         """Dựng lại: ô cha của một ô khoá phải có lại đúng id ở đúng tầng, không thì ô khoá mồ côi (PG105, PG401)."""
@@ -744,7 +797,9 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
     top = None
     top_ok = False
     try:
-        top, top_ok = step("Dựng TẦNG ĐẦU của sơ đồ: 5–7 ô (`parent: null`), các cạnh giữa chúng, và `expand`."
+        top, top_ok = step("Dựng TẦNG ĐẦU của sơ đồ: 5–7 ô (`parent: null`) và các cạnh giữa chúng. Không cần "
+                           "`expand`: chương trình sẽ mở mọi ô tầng đầu trừ ô vấn đề (`kind: problem`), nên ô nào "
+                           "cũng phải có điều đáng mở."
                            + need(None), None, "khung")
         merged = _merge(merged, top)
         if stopped:
@@ -753,9 +808,12 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             res.log.append("khung còn lỗi sau các lượt sửa: dừng, chỉ ghi nháp" if top else "không dựng được khung")
             say(res.log[-1])
         else:
-            queue = [(x, 1) for x in top["expand"]][:9]
+            # Chương trình, không phải model, chọn ô tầng đầu cần mở: đo 2026-10-20, model chỉ đánh dấu 2–3 ô nên sơ
+            # đồ không dày hơn cách một lượt. Ô vấn đề thường không có tầng dưới đáng mở.
+            queue = [(n["id"], 1) for n in merged["nodes"]
+                     if n.get("parent") is None and n.get("kind") != "problem"][:9]
             if not queue:
-                res.log.append("khung không đánh dấu ô nào cần mở: sơ đồ chỉ có tầng đầu; chạy lại nếu bài cần tầng dưới")
+                res.log.append("tầng đầu không có ô nào ngoài ô vấn đề: sơ đồ chỉ có tầng đầu")
                 say(res.log[-1])
         while queue:
             target, depth = queue.pop(0)
@@ -777,6 +835,8 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             gaps = [d for d in rep.diags if d.code in REVIEW_CODES]
             if gaps and rep.errors == 0:
                 review(gaps, rep.stats)
+            if checked(merged)[1].errors == 0:
+                audit()
     except _Stop as e:
         res.log.append(str(e) + "; giữ các phần đã đạt")
         say(res.log[-1])
