@@ -124,3 +124,17 @@ Bài chưa từng dùng để sửa skill (docs/bench.md mục "Merging"). Cùng
 
 - Lần đầu sơ đồ đủ thông tin cho cả 12 câu ở một bài model không biết (lượt 2: Prism, Ignored 11/12). Một bài, một lần
   dựng: chưa đủ để nói skill sửa ngày 20/10 tốt hơn, chỉ là không kém.
+
+## Bộ đồ đã sẵn (2026-10-21)
+
+- Thư mục gửi người đọc: `papers/do-hieu-bai/goi/` (không vào git, vì nhúng chữ và ảnh của bài; tạo lại bằng hai lệnh ở mục
+  "Công cụ" cho cả Attention và RAG, rồi chép hai PDF): `attention.pdf`, `attention.html`, `attention.quiz.html`,
+  `rag.pdf`, `rag.html`, `rag.quiz.html`, `HUONG-DAN.md` (bản chép của `docs/huong-dan-nguoi-doc.md`). Khoảng 7 MB, nén
+  lại gửi được qua email hay Drive. Mọi trang chạy offline, không tải gì từ ngoài.
+- Chia nhóm xen kẽ theo thứ tự nhận lời (A, B, A, B…), báo người đọc nhóm của họ.
+- Gom kết quả: mỗi dòng người đọc gửi, thêm `"nguoi"` (mã, vd. P1, không ghi tên thật) và `"nhom"`, ghi vào một file
+  `.jsonl`, mỗi dòng một JSON; lần làm lại sau 7 ngày thêm `"lan": 2`. Không đưa file này vào git nếu có thông tin cá
+  nhân.
+- Chấm: `python3 bench/hieu_bai.py ket-qua.jsonl`. Script chấm lại từ `tra_loi` (không tin điểm tự báo), in từng người
+  (điểm, số "Không biết", thời gian, hiệu sơ đồ − chữ), trung vị và số người hơn/kém/bằng theo nhóm A, B và gộp, và
+  điểm theo loại câu. Test: `tests/test_hieu_bai.py`.

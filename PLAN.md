@@ -359,9 +359,19 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     (`.tmp/dung-so-do-workspace/iteration-9/merging/`). Xong: gold (13 must, 7 tuỳ chọn, 4 probes) và quiz 12 câu chép vào
     `bench/papers/merging/`, `test_quiz` kiểm thêm bài này, 249 test đạt (biên nhận). Sơ đồ skill: 50 ô, check 0 lỗi 2
     cảnh báo có lý do; `score` phủ 13/13, đúng tầng 69% (sơ đồ tách hai ô result, gold có một), quan hệ 86%, soi 3/4.
-    Đo hiểu bài: không đọc 0/12, đọc chữ 12/12, đọc sơ đồ 12/12 (docs/do-hieu-bai.md "Lượt 3"). Đã commit (bạn bảo
-    bạn bảo. Góp ý của agent dựng cho skill: tên mô hình có dấu cách ("Qwen 2.5") dính
+    Đo hiểu bài: không đọc 0/12, đọc chữ 12/12, đọc sơ đồ 12/12 (docs/do-hieu-bai.md "Lượt 3"). Đã commit `d537633` (bạn bảo
+    "commit đi"). Góp ý của agent dựng cho skill: tên mô hình có dấu cách ("Qwen 2.5") dính
     PG220; PG303 + PG305 cho ô "chỗ lệch" không cạnh; hình nhiều mảnh nên gắn id nào.
+16. **Bỏ việc chặn cứng lệnh mạng** (2026-10-21, bạn chốt: Claude Code thì không cần, `build` qua API cũng không vì
+    model không có công cụ). Ghi lý do ở `.agent/threat-model.md` cuối file (TM-6 chấp nhận rủi ro còn lại). Mốc 6 xong.
+    Đã commit cùng mục 17. Việc tiếp: 5.1, 5.2 chờ phiên VietPaper commit xong; 6.1 cần bạn mời người
+    đọc thật.
+17. **6.1: bộ đồ đo người đọc thật đã sẵn, chờ bạn mời người** (2026-10-21, bạn bảo "làm 6.1"; đã commit, thư mục gửi đi không vào git). Thư mục
+    gửi đi `papers/do-hieu-bai/goi/` (PDF, sơ đồ, trang câu hỏi của Attention và RAG, `HUONG-DAN.md`; không vào git,
+    khoảng 7 MB), hướng dẫn người đọc `docs/huong-dan-nguoi-doc.md`, cách gom và chấm ở docs/do-hieu-bai.md "Bộ đồ đã
+    sẵn". Script chấm `bench/hieu_bai.py` (chấm lại từ câu trả lời, trung vị và hơn/kém/bằng theo nhóm, theo loại câu),
+    3 test; 252 test đạt (biên nhận). Trang câu hỏi mở được trong trình duyệt, console sạch. Tiếp (@ban): mời người đọc,
+    chia nhóm A, B xen kẽ, gom dòng kết quả vào một file `.jsonl`, rồi nhờ mình chạy `python3 bench/hieu_bai.py`.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -450,5 +460,5 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Luật PG309 cho bảng kết quả bị bỏ sót; `read --find` tìm cả chữ trong bảng; SKILL.md theo góp ý agent dựng. (`2f3d14a`)
 - [x] `build --mode tiers`: dựng từng tầng, giữ one-shot để so. (`3da16cc`)
 - [x] `build` theo tầng đạt tiêu chí so với one-shot trên RAG, DataSentinel, Prism (v2 tự mở ô tầng đầu, lượt đối chiếu; lần đo chốt 21/10)
-- [ ] Chặn cứng lệnh mạng cho agent dựng sơ đồ (`permissions.deny` trong `.claude/settings.json`) @ban
+- [x] ~~Chặn cứng lệnh mạng cho agent dựng sơ đồ (`permissions.deny`)~~: bỏ, bạn chốt 2026-10-21 không cần (chấp nhận rủi ro; `build` không có công cụ nên không liên quan)
 - [x] Bài mới thứ ba cho bộ đo skill: Prism và Ignored đã dùng để sửa skill ngày 20/10, đo skill mới cần bài chưa dùng (Merging, 21/10)

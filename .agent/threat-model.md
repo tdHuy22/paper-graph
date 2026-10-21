@@ -178,3 +178,9 @@ API ở lượt sửa khung làm mất bản khung (`stopped`); dựng lại v�
 cùng tầng); câu trả lời rỗng bỏ luôn phần (giờ nhắc rồi thử tiếp); nhãn do model viết lọt vào tin nhắn chỉ dẫn (giờ chỉ
 id); lượt soát không giữ độ sâu (`_depth`); `expand` rỗng không báo (giờ log); hồ sơ và test lệch code (bảng trên, 9 test
 mới).
+
+Quyết định 2026-10-21 (bạn chốt): không thêm `permissions.deny` cho lệnh mạng (F3 của review Mốc 2). Với skill trong Claude
+Code, TM-6 chấp nhận rủi ro còn lại: chốt chặn là lời dặn trong skill, lời nhắc dữ liệu của `read`, và các lần thử bài mồi
+(chữ và ảnh) đều đạt. Với `build`, model không có công cụ nào, câu trả lời chỉ được parse như JSON (TM-23, TM-26, TM-28), nên
+luật quyền của Claude Code không liên quan.
+

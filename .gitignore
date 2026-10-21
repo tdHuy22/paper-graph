@@ -12,3 +12,5 @@ __pycache__/
 *.figures/
 # trang xuất từ sơ đồ (nhúng ảnh, chữ của bài): tạo lại bằng `view`, `quiz`
 papers/**/*.html
+# bộ đồ gửi người đọc (PDF, trang nhúng chữ của bài): tạo lại theo docs/do-hieu-bai.md "Bộ đồ đã sẵn"
+papers/do-hieu-bai/
