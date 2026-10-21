@@ -1,0 +1,214 @@
+{
+ "version": 1,
+ "paper": {
+  "title": "Controlling the Diversity-Quality Trade-Off of LLMs by Merging Models Before and After Alignment",
+  "sha256": "54c3ef403a4eb4b0379ea3f658205d4361e6ddbffacbecb6b087c4f6f1e9c6f8",
+  "blocks": "merging.blocks.json"
+ },
+ "questions": [
+  {
+   "id": "q1",
+   "kind": "big",
+   "q": "Với vị trí cắt i, model ghép của bài lấy lớp nào từ model nào?",
+   "choices": [
+    "Lớp 1..i lấy từ base model, lớp i+1..L lấy từ aligned model, để đầu ra cuối cùng do các lớp đã qua alignment quyết định",
+    "Lớp 1..i lấy từ aligned model, lớp i+1..L lấy từ base model, rồi nối tuần tự thành một model mới không huấn luyện thêm",
+    "Mọi lớp lấy trung bình trọng số của hai model, với i/L là hệ số dành cho aligned model ở từng lớp của mạng ghép",
+    "Xen kẽ từng lớp của hai model, cứ i lớp aligned lại tới một lớp base, lặp lại cho tới hết L lớp"
+   ],
+   "answer": 1,
+   "explain": "Quy trình ở §3 (Hình 1): lớp thứ nhất tới lớp thứ i của aligned model A nối với lớp i+1 tới L của base model B. Thứ tự ngược lại (base ở dưới) là model \"swapped\" trong ablation, không phải phương pháp chính.",
+   "anchors": [
+    {"page": 3, "quote": "We then sequentially combine the layers from the first to the i-th layer"},
+    {"page": 1, "quote": "combines the lower layers of an aligned model with the higher layers"}
+   ]
+  },
+  {
+   "id": "q2",
+   "kind": "big",
+   "q": "Giả thuyết nào là lý do bài chọn cách chia lớp như vậy?",
+   "choices": [
+    "Đa dạng ngữ nghĩa gắn với lớp dưới còn đa dạng từ vựng gắn với lớp trên, nên lớp trên phải lấy từ aligned để giữ chất lượng",
+    "Cả hai loại đa dạng đều tập trung ở các lớp giữa, nên chỉ vùng giữa của mạng mới cần lấy từ base model",
+    "Đa dạng nằm chủ yếu ở lớp embedding và LM head, nên chỉ cần đổi hai phần này giữa hai model là đủ",
+    "Đa dạng từ vựng gắn với lớp dưới, đa dạng ngữ nghĩa gắn với lớp trên, nên lấy lớp trên từ base để có đa dạng ngữ nghĩa"
+   ],
+   "answer": 3,
+   "explain": "Dựa trên phát hiện vai trò của lớp đổi theo độ sâu (Liu et al., 2024), bài giả thuyết đa dạng từ vựng gắn với lớp dưới, đa dạng ngữ nghĩa gắn với lớp trên; nên dùng lớp trên của base model sẽ đưa đa dạng ngữ nghĩa của base vào model ghép.",
+   "anchors": [
+    {"page": 2, "quote": "we hypothesize that lexical diversity is more closely associated with lower layers"},
+    {"page": 4, "quote": "by utilizing the higher layers extracted from the base model, its semantic diversity"}
+   ]
+  },
+  {
+   "id": "q3",
+   "kind": "mechanism",
+   "q": "Khi ghép bằng MergeKit, các phần ngoài khối lớp (embedding, lớp chuẩn hoá cuối, LM head, tokenizer) lấy từ đâu?",
+   "choices": [
+    "Embedding đầu vào từ model của lát thứ nhất, lớp chuẩn hoá cuối và LM head từ model của lát thứ hai, tokenizer của base",
+    "Embedding đầu vào và LM head đều lấy trung bình của hai model, lớp chuẩn hoá cuối từ aligned, tokenizer của aligned",
+    "Cả embedding, lớp chuẩn hoá cuối lẫn LM head đều lấy từ aligned model, tokenizer cũng của aligned model",
+    "Embedding đầu vào từ base model, LM head từ aligned model, lớp chuẩn hoá cuối được huấn luyện lại ngắn trên dữ liệu chat"
+   ],
+   "answer": 0,
+   "explain": "Phụ lục A.2: passthrough của MergeKit không lấy trung bình, không scale, không huấn luyện; nó lấy embedding đầu vào từ model của lát thứ nhất và lớp chuẩn hoá cuối cùng LM head từ model của lát thứ hai; mọi điều kiện dùng tokenizer của base model (cùng từ vựng với aligned).",
+   "anchors": [
+    {"page": 11, "quote": "MergeKit takes the input embeddings from the model of the first slice"},
+    {"page": 11, "quote": "takes the final normalization layer and the language modeling head"},
+    {"page": 11, "quote": "All conditions use the tokenizer of the base model"}
+   ]
+  },
+  {
+   "id": "q4",
+   "kind": "mechanism",
+   "q": "Bài đo đa dạng từ vựng (Divlex) thế nào?",
+   "choices": [
+    "Đếm tỉ lệ n-gram khác nhau (Distinct-n) trên một đầu ra cho mỗi đầu vào, gộp qua toàn bộ 500 đầu vào",
+    "Lấy 1 trừ BLEU của đầu ra so với bản tham chiếu của tập dữ liệu, trung bình qua 10 đầu ra cho mỗi đầu vào",
+    "Lấy 1 trừ Self-BLEU: mỗi đầu ra chấm BLEU với các đầu ra còn lại của cùng đầu vào, rồi lấy trung bình",
+    "Lấy entropy của phân phối token ở mỗi bước giải mã, trung bình theo độ dài đầu ra và theo các đầu vào"
+   ],
+   "answer": 2,
+   "explain": "Self-BLEU chấm mỗi đầu ra bằng BLEU với các đầu ra khác cho cùng đầu vào rồi lấy trung bình (thấp là đa dạng); bài định nghĩa Divlex = 1 − Self-BLEU để cao là đa dạng, tính trên M = 10 đầu ra mỗi đầu vào.",
+   "anchors": [
+    {"page": 4, "quote": "against the other outputs for the same input and averages the scores"},
+    {"page": 4, "quote": "as one minus Self-BLEU so that higher values indicate higher lexical diversity"}
+   ]
+  },
+  {
+   "id": "q5",
+   "kind": "mechanism",
+   "q": "Khi so với temperature sampling bằng Hypervolume, điểm tham chiếu được đặt thế nào?",
+   "choices": [
+    "Là gốc toạ độ (đa dạng 0, chất lượng 0), cố định cho mọi model, mọi tác vụ và mọi lần lấy mẫu bootstrap",
+    "Là điểm của model ghép ở i = L/2, để so mọi cách khác với cấu hình đứng giữa của chính phương pháp",
+    "Là điểm của temperature sampling ở T = 0,0 (giải mã tham lam) với aligned model, tính riêng cho từng tác vụ và họ model",
+    "Là min theo từng thành phần của điểm base và aligned ở nhiệt độ 1,0, tính lại trong mỗi lần lấy mẫu bootstrap"
+   ],
+   "answer": 3,
+   "explain": "Hypervolume là diện tích vùng bị ít nhất một điểm trội hơn và trội hơn điểm tham chiếu; điểm tham chiếu là min theo từng thành phần của điểm base và aligned ở nhiệt độ 1,0, và được tính lại trong mỗi lần lấy mẫu của paired bootstrap.",
+   "anchors": [
+    {"page": 6, "quote": "We set the reference point to the component-wise minimum of the points"},
+    {"page": 6, "quote": "recomputed the reference point in each resample"}
+   ]
+  },
+  {
+   "id": "q6",
+   "kind": "mechanism",
+   "q": "Ablation \"swapped\" kiểm giả thuyết bằng cách nào, và kết quả về đa dạng ngữ nghĩa ra sao?",
+   "choices": [
+    "Bỏ hẳn các lớp giữa của model ghép; đa dạng ngữ nghĩa tăng vượt cả base model ở mọi giá trị i",
+    "Lấy lớp 1..i từ base, i+1..L từ aligned; đa dạng ngữ nghĩa của model đảo ở mức hay dưới base ở gần như mọi i",
+    "Lấy lớp 1..i từ base, i+1..L từ aligned; đa dạng ngữ nghĩa của model đảo cao hơn hẳn model ghép chính ở mọi giá trị i",
+    "Đổi chỗ embedding và LM head giữa hai model; đa dạng ngữ nghĩa không đổi so với aligned ở mọi giá trị i"
+   ],
+   "answer": 1,
+   "explain": "§4.4 đảo thứ tự: lớp 1..i từ base, i+1..L từ aligned. Đa dạng ngữ nghĩa của model đảo nằm ở mức hay dưới base ở gần như mọi i, nên bài cho đa dạng ngữ nghĩa cao của cách ghép chính có thể gắn với việc dùng lớp trên của base.",
+   "anchors": [
+    {"page": 7, "quote": "we combined layers 1 to i from the base model"},
+    {"page": 8, "quote": "semantic diversity of the swapped models remained at or below that of the base model"}
+   ]
+  },
+  {
+   "id": "q7",
+   "kind": "evidence",
+   "q": "Theo Hình 2, model ghép có đa dạng từ vựng cao hơn cả hai model gốc ở bao nhiêu giá trị i?",
+   "choices": [
+    "Ở một số i, từ 2 giá trị (LLaMA 2 hội thoại) tới 25 (LLaMA 2 viết truyện), chủ yếu là i nhỏ tới vừa",
+    "Ở mọi giá trị i của mọi tác vụ và cả hai họ model, khoảng cách lớn nhất nằm ở các giá trị i gần L nhất",
+    "Không ở giá trị i nào: đa dạng từ vựng luôn nằm giữa base và aligned, chỉ đa dạng ngữ nghĩa mới vượt",
+    "Chỉ ở i = 1 của mỗi tác vụ, nơi model ghép gần như là base model cộng thêm một lớp của aligned model"
+   ],
+   "answer": 0,
+   "explain": "§4.1.2: ở nhiều tác vụ, model ghép đa dạng từ vựng hơn cả hai model gốc ở một số i; số giá trị như vậy từ 2 (LLaMA 2 hội thoại) tới 25 (LLaMA 2 viết truyện), chủ yếu là i nhỏ tới vừa.",
+   "anchors": [
+    {"page": 5, "quote": "The number of such values ranged from 2 in LLaMA 2 dialogue generation to 25"},
+    {"page": 5, "quote": "these values were mainly small to intermediate ones"}
+   ]
+  },
+  {
+   "id": "q8",
+   "kind": "evidence",
+   "q": "Bảng 1, đa dạng ngữ nghĩa ở Qwen 2.5: model ghép so với temperature sampling ra sao?",
+   "choices": [
+    "Hơn có ý nghĩa cả temperature sampling với base lẫn với aligned, ở cả dịch và tóm tắt",
+    "Thua có ý nghĩa temperature sampling với aligned, nhưng hơn có ý nghĩa temperature sampling với base",
+    "Hơn có ý nghĩa temperature sampling với aligned, còn với base thì ngang (khoảng tin cậy chứa 0)",
+    "Không tính được vì Hypervolume của cả ba cách đều bằng 0 ở Qwen 2.5 với đa dạng ngữ nghĩa"
+   ],
+   "answer": 2,
+   "explain": "Với đa dạng ngữ nghĩa, Qwen 2.5: model ghép hơn có ý nghĩa temperature sampling với aligned model và ngang với base (dịch 11,53 so với 11,99, chênh −0,45 [−0,88; +0,21]; tóm tắt +0,03, đều không có dấu *).",
+   "anchors": [
+    {"page": 6, "quote": "the merged models significantly exceeded temperature sampling with the aligned model and were comparable"}
+   ]
+  },
+  {
+   "id": "q9",
+   "kind": "evidence",
+   "q": "Trong ablation, Divlex của cách ghép chính cao hơn có ý nghĩa so với model đảo ở bao nhiêu giá trị i?",
+   "choices": [
+    "Ở mọi giá trị i của cả hai họ model và cả bốn tác vụ, sau khi đã hiệu chỉnh cho nhiều phép so",
+    "Chỉ ở khoảng nửa số i của LLaMA 2, nhưng ở gần hết số i của cả bốn tác vụ với Qwen 2.5",
+    "Không ở i nào có ý nghĩa sau hiệu chỉnh; bài chỉ dựa vào hình dạng đường để nói về xu hướng",
+    "27–30 trên 31 i ở LLaMA 2, 22–26 trên 27 ở ba tác vụ của Qwen 2.5, nhưng chỉ 9 trên 27 ở Qwen 2.5 dịch"
+   ],
+   "answer": 3,
+   "explain": "§4.4.2: Divlex của cách ghép chính cao hơn có ý nghĩa ở 27–30/31 i của LLaMA 2, 22–26/27 i ở Qwen 2.5 tóm tắt, viết truyện, hội thoại, và chỉ 9/27 i ở Qwen 2.5 dịch.",
+   "anchors": [
+    {"page": 8, "quote": "for 27 to 30 of the 31 values of i in LLaMA 2"},
+    {"page": 8, "quote": "for 9 of the 27 values in Qwen 2.5 translation"}
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "detail",
+   "q": "Ở Qwen 2.5, aligned model cho chất lượng kém base model ở cả dịch và tóm tắt. Bài giải thích thế nào?",
+   "choices": [
+    "Aligned model của Qwen 2.5 được lượng tử hoá xuống 8 bit khi sinh, còn base model giữ nguyên bfloat16",
+    "Mọi model nhận prompt văn bản thuần theo định dạng của base model, không dùng chat template",
+    "COMET và BERTScore phạt câu dài, mà aligned model của Qwen 2.5 thường sinh đầu ra dài hơn base",
+    "Nhiệt độ 1,0 quá cao cho aligned model của Qwen 2.5, nên chất lượng của nó tụt mạnh hơn base model"
+   ],
+   "answer": 1,
+   "explain": "§4.2.2: kết quả này có lẽ do mọi model nhận prompt văn bản thuần theo định dạng của base model, không có chat template (Phụ lục A.4: không dùng chat template, kể cả cho aligned model).",
+   "anchors": [
+    {"page": 6, "quote": "all models received plain-text prompts in the input format of base models"},
+    {"page": 12, "quote": "We did not apply chat templates, even to the aligned models."}
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "limit",
+   "q": "Mục giới hạn nói gì về vùng trade-off mà phương pháp chỉnh được?",
+   "choices": [
+    "Bị kẹp trong phạm vi của base và aligned model, nên chất lượng và đa dạng của model ghép phụ thuộc hai model đó",
+    "Chỉ chỉnh được ở các tác vụ có bản tham chiếu, vì i phải chọn bằng COMET hay BERTScore trên tập kiểm định",
+    "Chỉ đúng cho model có số lớp chẵn, vì vị trí cắt phải chia mạng thành hai nửa bằng nhau về số lớp",
+    "Bị giới hạn ở nhiệt độ 1,0, vì ở nhiệt độ khác model ghép mất ưu thế so với temperature sampling"
+   ],
+   "answer": 0,
+   "explain": "Mục Limitations: vùng trade-off chất lượng–đa dạng mà cách làm chỉnh được bị giới hạn trong phạm vi của base và aligned model, nên chất lượng và đa dạng của model ghép phụ thuộc vào hai model này; bài kỳ vọng giới hạn này giảm khi base model tốt lên.",
+   "anchors": [
+    {"page": 9, "quote": "the trade-off range between quality and diversity that our approach can control is limited"},
+    {"page": 9, "quote": "the quality and diversity of the merged model depend on those of these two models"}
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "limit",
+   "q": "Bài tự nhận phân tích vai trò của độ sâu lớp còn thiếu gì?",
+   "choices": [
+    "Chưa kiểm trên model lớn hơn 70B tham số, nơi vai trò của các lớp có thể phân bố hoàn toàn khác",
+    "Chưa so với ghép bằng trung bình trọng số, nên chưa biết chia theo độ sâu có tốt hơn lấy trung bình không",
+    "Chỉ so hai thứ tự ghép; cần phân tích mịn hơn, như thay một số lớp cố định ở các độ sâu khác nhau",
+    "Chỉ đo trên đầu ra tiếng Anh, nên chưa biết lớp dưới có còn gắn với đa dạng từ vựng ở ngôn ngữ khác"
+   ],
+   "answer": 2,
+   "explain": "Mục Limitations: phân tích độ sâu chỉ so hai thứ tự ghép; phân tích mịn hơn, ví dụ thay một số lớp cố định ở các độ sâu khác nhau, sẽ cho hiểu rõ hơn vai trò của từng lớp.",
+   "anchors": [
+    {"page": 9, "quote": "Our analysis of layer depth compares the two merging orders."},
+    {"page": 9, "quote": "for example the replacement of a fixed number of layers at different depths"}
+   ]
+  }
+ ]
+}

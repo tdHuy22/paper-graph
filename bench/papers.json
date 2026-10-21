@@ -14,6 +14,8 @@
   {"name": "prism", "pdf": "bench/pdf/prism-attention.pdf", "source": "https://arxiv.org/pdf/2610.22985v1",
    "sha256": "3ab0f927c0a69921845e0ac1a12800f1a96a130bb68d34d5b17f373ec65442ab"},
   {"name": "ignored", "pdf": "bench/pdf/ignored-not-refused.pdf", "source": "https://arxiv.org/pdf/2610.23254v1",
-   "sha256": "391790057356fafd47e00f45972d711c277b5138f7c068eb74269386b73a51da"}
+   "sha256": "391790057356fafd47e00f45972d711c277b5138f7c068eb74269386b73a51da"},
+  {"name": "merging", "pdf": "bench/pdf/merging-diversity.pdf", "source": "https://arxiv.org/pdf/2610.22999v1",
+   "sha256": "54c3ef403a4eb4b0379ea3f658205d4361e6ddbffacbecb6b087c4f6f1e9c6f8"}
  ]
 }

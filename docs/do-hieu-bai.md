@@ -113,3 +113,14 @@ lượt 1 (6 agent Sonnet; câu trả lời ở `.tmp/do-hieu-bai/2026-10-19-mod
   (độ chính xác, tốc độ; skill cho phép), đáp án chỉ có một ý `result`. Không sửa đáp án thêm theo sơ đồ. Điểm soi
   `speedup_bsz16` trượt dù sơ đồ có cả 3,36× và 1,15× (ở hai ô nối bằng cạnh `contradicts`): điểm soi `note` đòi cả hai
   số trong một ô.
+
+### Lượt 3: bài Merging, skill sau lần sửa 20/10 (2026-10-21)
+
+Bài chưa từng dùng để sửa skill (docs/bench.md mục "Merging"). Cùng cách đo như lượt 2.
+
+| Bài | Không đọc | Đọc chữ | Đọc sơ đồ |
+|---|---|---|---|
+| Merging | 0/12 (12 "Không biết") | 12/12 | 12/12 |
+
+- Lần đầu sơ đồ đủ thông tin cho cả 12 câu ở một bài model không biết (lượt 2: Prism, Ignored 11/12). Một bài, một lần
+  dựng: chưa đủ để nói skill sửa ngày 20/10 tốt hơn, chỉ là không kém.

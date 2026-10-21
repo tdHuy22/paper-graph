@@ -95,7 +95,7 @@ class Quiz(unittest.TestCase):
             self.assertNotIn(bad, js)
 
     def test_bench_quizzes_pass(self):
-        for name in ("attention", "rag", "prism", "ignored"):
+        for name in ("attention", "rag", "prism", "ignored", "merging"):
             with self.subTest(name=name):
                 _, diags = quiz.load(ROOT / "bench/papers" / name / f"{name}.quiz.json")
                 self.assertFalse(diags, diags)  # không lỗi, cả không PG231

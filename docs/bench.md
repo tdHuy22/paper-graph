@@ -292,3 +292,16 @@ theo đúng tiêu chí ở trên. Không chạy lại để tìm lần đạt: l
 - Giới hạn: mỗi bài một lần chạy, nên lợi thế 1–2 ý vẫn nằm trong mức dao động đã thấy (BERT 17/10). Đổi lại: 15–18
   lượt mỗi bài thay vì 4, chạy khoảng 20 phút mỗi bài thay vì 5. `build` giữ `--mode tiers` làm mặc định, `--mode
   one-shot` vẫn còn.
+
+## Bài thứ ba ra sau mốc dữ liệu: Merging (2026-10-21)
+
+"Controlling the Diversity-Quality Trade-Off of LLMs by Merging Models Before and After Alignment" (arXiv 2610.22999, 13
+trang), chưa từng dùng để sửa skill. Gold (13 ý bắt buộc, 7 tuỳ chọn, 4 điểm soi) và 12 câu hỏi do agent Opus soạn chỉ từ
+`read`; sơ đồ do skill dựng sau lần sửa 20/10 (agent Opus, `.tmp/dung-so-do-workspace/iteration-9/merging/`), hai agent
+không thấy kết quả của nhau.
+
+- Sơ đồ: 50 ô, sâu 2, `check` 0 lỗi, 2 cảnh báo có lý do (ô "chỗ lệch" về kết luận "4 tác vụ" không có bằng chứng).
+- `score`: phủ 13/13, đúng tầng 69%, quan hệ 86%, tuỳ chọn 5/7, soi 3/4. Đúng tầng thấp vì sơ đồ tách kết quả thành hai ô
+  tầng đầu (đa dạng, so với temperature), skill cho phép, còn gold chỉ có một ý `result`: cùng kiểu lệch đáp án đã gặp ở
+  Prism. Không sửa gold theo sơ đồ.
+- Đo hiểu bài bằng model (docs/do-hieu-bai.md, `.tmp/do-hieu-bai/2026-10-21-merging/`): xem bảng ở docs/do-hieu-bai.md.

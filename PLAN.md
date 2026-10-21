@@ -353,6 +353,15 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     13/13; soi ngang (0/4, 1/2, 0/3). Tiêu chí đặt trước đạt; giới hạn và chi phí (15–18 lượt mỗi bài) ở docs/bench.md mục
     cuối. 249 test đạt (biên nhận). Tiers giữ làm mặc định. Còn mở: điểm soi model free vẫn thấp (phần thêm của lượt đối
     chiếu thường còn lỗi neo).
+15. **Xong: bài mới thứ ba cho bộ đo skill** (2026-10-21, bạn duyệt tải). Merging (arXiv 2610.22999, 13 trang,
+    `bench/pdf/merging-diversity.pdf`, ghim sha256 và `source` trong `bench/papers.json`; `prepare.py`: 237 đoạn). Đang
+    chạy hai agent Opus: soạn gold + quiz chỉ từ `read` (ghi `.tmp/stage/merging/`), dựng sơ đồ bằng skill sau sửa 20/10
+    (`.tmp/dung-so-do-workspace/iteration-9/merging/`). Xong: gold (13 must, 7 tuỳ chọn, 4 probes) và quiz 12 câu chép vào
+    `bench/papers/merging/`, `test_quiz` kiểm thêm bài này, 249 test đạt (biên nhận). Sơ đồ skill: 50 ô, check 0 lỗi 2
+    cảnh báo có lý do; `score` phủ 13/13, đúng tầng 69% (sơ đồ tách hai ô result, gold có một), quan hệ 86%, soi 3/4.
+    Đo hiểu bài: không đọc 0/12, đọc chữ 12/12, đọc sơ đồ 12/12 (docs/do-hieu-bai.md "Lượt 3"). Đã commit (bạn bảo
+    bạn bảo. Góp ý của agent dựng cho skill: tên mô hình có dấu cách ("Qwen 2.5") dính
+    PG220; PG303 + PG305 cho ô "chỗ lệch" không cạnh; hình nhiều mảnh nên gắn id nào.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -442,4 +451,4 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] `build --mode tiers`: dựng từng tầng, giữ one-shot để so. (`3da16cc`)
 - [x] `build` theo tầng đạt tiêu chí so với one-shot trên RAG, DataSentinel, Prism (v2 tự mở ô tầng đầu, lượt đối chiếu; lần đo chốt 21/10)
 - [ ] Chặn cứng lệnh mạng cho agent dựng sơ đồ (`permissions.deny` trong `.claude/settings.json`) @ban
-- [ ] Bài mới thứ ba cho bộ đo skill: Prism và Ignored đã dùng để sửa skill ngày 20/10, đo skill mới cần bài chưa dùng
+- [x] Bài mới thứ ba cho bộ đo skill: Prism và Ignored đã dùng để sửa skill ngày 20/10, đo skill mới cần bài chưa dùng (Merging, 21/10)
