@@ -138,3 +138,30 @@ Bài chưa từng dùng để sửa skill (docs/bench.md mục "Merging"). Cùng
 - Chấm: `python3 bench/hieu_bai.py ket-qua.jsonl`. Script chấm lại từ `tra_loi` (không tin điểm tự báo), in từng người
   (điểm, số "Không biết", thời gian, hiệu sơ đồ − chữ), trung vị và số người hơn/kém/bằng theo nhóm A, B và gộp, và
   điểm theo loại câu. Test: `tests/test_hieu_bai.py`.
+
+## Mô phỏng người đọc bằng model (2026-10-21)
+
+Bạn bảo "tự AI đọc luôn rồi đánh giá luôn". Đo trước đây cho model đọc trọn bài không giới hạn nên đọc chữ luôn 12/12;
+người thật thì đọc 15 phút rồi trả lời theo trí nhớ. Mô phỏng giới hạn trí nhớ, không giới hạn thời gian:
+
+- Bước đọc: một agent Sonnet đọc tài liệu (chữ bài từ `read`, hay `graph.json` của skill), không biết câu hỏi, viết ghi
+  chú tiếng Việt tối đa 250 chữ. Ba ghi chú vượt (305–311 chữ) được cắt về 250 chữ cho cả hai điều kiện ngang nhau.
+- Bước trả lời: một agent Sonnet mới chỉ có ghi chú và 12 câu, được chọn "Không biết".
+- Ba bài model không biết: Prism, Ignored, Merging (sơ đồ skill ở `.tmp/dung-so-do-workspace/iteration-8/`,
+  `iteration-9/`). Tài liệu, ghi chú, câu trả lời ở `.tmp/do-hieu-bai/2026-10-21-mophong/`.
+
+| Bài | Đọc chữ (đúng / không biết) | Đọc sơ đồ (đúng / không biết) | Hiệu |
+|---|---|---|---|
+| Prism | 8 / 4 | 10 / 1 (1 sai) | +2 |
+| Ignored | 8 / 4 | 7 / 5 | −1 |
+| Merging | 5 / 7 | 8 / 4 | +3 |
+| Cộng | 21/36 | 25/36 | +4 |
+
+Theo loại câu (cộng ba bài, chữ so với sơ đồ): big 6/6 và 6/6, mechanism 5/12 và 7/12, evidence 6/9 và 7/9, limit 3/6
+và 4/6, detail 1/3 và 1/3.
+
+- Sơ đồ hơn ở 2 trên 3 bài, chủ yếu ở câu cơ chế. Ghi chú từ sơ đồ gọn ý hơn: sơ đồ đã chọn sẵn điều quan trọng.
+- Giới hạn: mỗi ô một lần đọc, một lần trả lời, nên chênh 1–3 câu nằm trong mức dao động; hai agent đọc chữ chỉ đọc được
+  khoảng ba phần tư file (công cụ đọc dừng ở dòng 187/234 và 210/287, mất phụ lục), giống người không đọc hết nhưng không
+  do thời gian; ghi chú từ sơ đồ dựa vào chữ tiếng Việt có sẵn, ghi chú từ chữ phải tự dịch. Đây là mô phỏng, không thay
+  phép đo người đọc thật (việc 6.1 vẫn mở).

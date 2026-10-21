@@ -372,6 +372,10 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     sẵn". Script chấm `bench/hieu_bai.py` (chấm lại từ câu trả lời, trung vị và hơn/kém/bằng theo nhóm, theo loại câu),
     3 test; 252 test đạt (biên nhận). Trang câu hỏi mở được trong trình duyệt, console sạch. Tiếp (@ban): mời người đọc,
     chia nhóm A, B xen kẽ, gom dòng kết quả vào một file `.jsonl`, rồi nhờ mình chạy `python3 bench/hieu_bai.py`.
+18. **Mô phỏng người đọc bằng model** (2026-10-21, bạn bảo "tự AI đọc luôn rồi đánh giá luôn"; đã commit). Agent đọc
+    ghi chú tối đa 250 chữ, agent mới trả lời chỉ từ ghi chú; Prism, Ignored, Merging. Đọc sơ đồ 25/36, đọc chữ 21/36
+    (+2, −1, +3), hơn chủ yếu ở câu cơ chế. Một lần mỗi ô, nên chưa chắc. Chi tiết docs/do-hieu-bai.md mục cuối. 6.1
+    (người thật) vẫn mở.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
