@@ -430,9 +430,26 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     hai lần đo chạy cùng lúc (tuần tự 30); cứu nhánh dùng 3 lần; nhánh kết quả bị bỏ 3/10 lần (chỗ yếu tiếp theo).
     Đã commit `c9c4f18` (bạn bảo "commit đi"; `.claude/launch.json` vẫn không commit). Bạn chốt 23/10: TM-30 chấp nhận
     rủi ro; không thử Ollama thật, đo chỉ bằng model free OpenRouter. Đối chiếu `--local` với tài liệu API (Ollama
-    `openai.go`, `api/types.go`, FAQ; LM Studio REST v0): khớp, không sửa code; README ghi. Chưa commit phần này.
-    Tiếp: 8.2 (nhánh kết quả bị bỏ 3/10 lần). Treo: thử model thật với `--local` cần cài
-    Ollama (@ban); TM-30 chấp nhận rủi ro cổng loopback trên máy dùng chung (@ban); Mốc 4 VietPaper chờ repo kia sạch.
+    `openai.go`, `api/types.go`, FAQ; LM Studio REST v0): khớp, không sửa code; README ghi. Đã commit `9eb5b39`.
+22. **Đang làm: các việc còn lại trên cây** (2026-10-23 chiều, bạn bảo "làm tiếp cho tới khi xong"). Xong: C.1 gỡ (biên
+    nhận trượt cũ của `check --strict` Attention đã xoá bằng `receipt.py forget`; không sửa sơ đồ Attention vì luật đo
+    người đọc ở docs/do-hieu-bai.md, cảnh báo PG309 cố ý giữ); nhánh kết quả bị bỏ: cả 3 lần lượt sửa cuối chỉ còn 1 lỗi →
+    `salvage` giờ bỏ câu trích hỏng (ô còn câu tốt) rồi bỏ đúng ô, cạnh, nhóm còn lỗi hay PG220, chỉ cho nhánh, không cho
+    khung; log nêu mã lỗi; test sửa và thêm, 4 đột biến đều đỏ. Mốc 4: VietPaper vẫn có phiên khác sửa (commit 14:50, 2 file
+    chưa commit) → gắn @cho. 8.2 xong: Nemotron 3.5 đối chiếu lại 38 câu trên 10 sơ đồ Dots 3 (43 lượt, không lỗi API),
+    thêm 2 ô, soi 9/34 → 9/34 → không đưa vào `build`, gạch trong §1, ghi docs/bench.md. Đang chạy nền: đo lại 5 bài × 2
+    (`.tmp/build/2026-10-23-measure2/`, lần 3, 4). 6/10 sơ đồ đầu: 0 lỗi, phủ 12–14, bước cứu dùng 9 lần, không nhánh nào
+    bị bỏ cả; RAG lần 4 mở 9 ô con của phương pháp, chạm trần 32, mất lượt đối chiếu → thêm `RESERVE_CALLS` (8): gần trần
+    thì thôi mở tầng thứ ba (test `test_third_tier_waits_for_calls_left_for_the_audit`, đột biến đỏ; README, threat
+    model ghi); bộ test đạt. Lần 3 xong: Ignored dừng ở khung (câu trả lời đầu 0 lỗi 4 PG220, 3 lượt sửa đều có lỗi neo,
+    chỉ ra nháp 7 ô) → khung còn lỗi thì xin lại khung từ đầu một lần (test `test_skeleton_asked_again_from_scratch`,
+    đột biến đỏ; README, threat model ghi). Đo lại xong (docs/bench.md mục cuối): lần 3, 4 không nhánh nào bị bỏ cả (lần
+    1, 2: 3/10), phủ 124/134 vì ba kiểu hỏng khác (chạm trần → để dành lượt; khung hỏng → xin lại khung; Merging lần 4 ô
+    kết quả neo lệch: giới hạn của bộ chấm, không sửa luật); chạy thật kiểm hai bản sửa: RAG lần 5 14/14, 100%, 100%;
+    Ignored lần 6 14/14, 100%, 57%. 8.1 tick. Chốt việc: tự rà diff (rủi ro thấp theo risk.py), bước bỏ ô lặp tới
+    3 vòng; bộ test đạt (biên nhận, 44,4 giây); 6 đột biến (cứu cả khung, chỉ bỏ PG220, bỏ kiểm lại cuối, không bỏ câu
+    trích trước, bỏ xin lại khung, bỏ để dành lượt) đều đỏ. Đã commit (bạn bảo "commit đi"). Tiếp: Mốc 4 chờ
+    phiên VietPaper xong.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -506,8 +523,8 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 
 ### Mốc 4: gắn vào VietPaper
 
-- [ ] Tab "Sơ đồ" cạnh bản dịch; bấm ô thì cuộn hai khung tới đúng đoạn.
-- [ ] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper).
+- [ ] Tab "Sơ đồ" cạnh bản dịch; bấm ô thì cuộn hai khung tới đúng đoạn. @cho (phiên VietPaper khác còn đang sửa repo đó)
+- [ ] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper). @cho (phiên VietPaper khác còn đang sửa repo đó)
 - [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
   model local chưa làm)
 
@@ -533,5 +550,5 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Đo Dots 3 trên 5 bài có đáp án, mỗi bài 2 lần: phủ 98%, soi 9/34, 0 lỗi cả 10 lần. (23/10)
 - [x] `build --local` gọi model chạy trên máy (Ollama, LM Studio; chỉ localhost) cho bài riêng tư. (23/10; kiểm bằng máy chủ giả, chưa thử model thật)
 - [x] ~~Thử `--local` với Ollama thật trên một bài~~: bỏ, bạn chốt 2026-10-23: không cài Ollama, chỉ đảm bảo `--local` dùng được (kiểm theo tài liệu API); đo chỉ bằng model free của OpenRouter
-- [ ] Nhánh kết quả bị bỏ 3/10 lần vì còn lỗi neo sau 3 lượt sửa: xem lỗi nào lặp, sửa chỉ dẫn hay bước cứu.
-- [ ] Soi bằng hai model free (đối chiếu chéo), làm sau cùng nếu còn đáng.
+- [x] Nhánh kết quả bị bỏ 3/10 lần vì còn lỗi neo sau 3 lượt sửa: cứu từng ô (chỉ nhánh), để dành 8 lượt cho soát và đối chiếu, khung hỏng thì xin lại một lần; đo lại 10 lần: 0 nhánh bị bỏ cả (docs/bench.md). (23/10)
+- [x] ~~Soi bằng hai model free (đối chiếu chéo)~~: đo 23/10, Nemotron 3.5 đối chiếu lại 38 câu trên 10 sơ đồ Dots 3, soi 9/34 → 9/34: không đáng, không làm (docs/bench.md)

@@ -241,3 +241,14 @@ khác mật độ (giờ chỉ khi số token gần như bằng hẳn). Đánh �
 (TM-6) có vai cao hơn; chỉ áp cho model trên máy, câu trả lời vẫn chỉ được parse như JSON và qua `check` (TM-23, TM-26).
 Bước `salvage` (bỏ đúng ô còn PG220): reviewer xác nhận không có số bịa nào lọt vào `graph.json` (`build` chỉ ghi khi 0 lỗi
 và 0 PG220 trên cả sơ đồ).
+
+Bổ sung 2026-10-23 chiều (việc 8.1): bước cứu nhánh (`salvage`) giờ bỏ cả ô còn lỗi, không chỉ ô còn PG220: trước tiên bỏ
+câu trích hỏng của ô còn câu trích tốt (`_drop_bad_anchors`), rồi bỏ đúng ô, cạnh, nhóm còn lỗi hay PG220 (`_drop_flagged`);
+lần kiểm lại cuối còn lỗi hay PG220 thì vẫn bỏ cả nhánh, nên không có gì chưa qua `check` lọt vào sơ đồ (TM-7, TM-23, TM-26).
+Chỉ áp cho nhánh: khung hỏng vẫn thành nháp. TM-27: `RESERVE_CALLS` (8) để dành lượt cho soát và đối chiếu bằng cách thôi
+mở tầng thứ ba khi gần trần; trần cứng `--max-calls` không đổi. Test: `test_cell_still_failing_is_dropped_from_its_branch`,
+`test_bad_quote_is_dropped_when_the_cell_has_a_good_one`, `test_branch_with_an_error_of_the_whole_tier_is_dropped_whole`,
+`test_third_tier_waits_for_calls_left_for_the_audit`; đột biến cứu cả khung, bỏ kiểm lại cuối, bỏ để dành lượt đều đỏ.
+Khung còn lỗi sau các lượt sửa thì xin lại khung từ đầu một lần (không kèm lịch sử sửa), tốn thêm tối đa `--rounds` + 1
+lượt, vẫn trong `--max-calls` (TM-27); vẫn lỗi thì nháp như cũ. Test `test_skeleton_asked_again_from_scratch`,
+`test_skeleton_failing_stops_with_a_draft`.

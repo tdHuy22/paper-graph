@@ -442,12 +442,19 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
         self.assertNotIn("r.bad", {e["to"] for e in res.graph["edges"]})
         self.assertTrue(any("bỏ ô r.bad" in x for x in res.log), res.log)
 
-    def test_branch_with_an_error_is_still_dropped_whole(self):
-        b = self.branch()
-        b["nodes"][0]["anchors"] = [{"page": 2, "quote": "this sentence is not in the paper at all"}]
+    def test_branch_with_an_error_of_the_whole_tier_is_dropped_whole(self):
+        """Lỗi của cả tầng (quá 9 ô) không gắn với ô nào: bỏ ô không chữa được, nên vẫn bỏ cả nhánh."""
+        b = {"nodes": [{"id": f"r.c{i}", "kind": "claim", "label": f"Ý {chr(65 + i)}",
+                        "anchors": [{"page": 2, "quote": "a measured speedup of four times"}]} for i in range(10)],
+             "edges": []}
         res, _ = self.go(F(self.top(), b, b, b))
         self.assertEqual({n["id"] for n in res.graph["nodes"]}, {"problem", "result"})
         self.assertTrue(any("bỏ nhánh result" in x for x in res.log), res.log)
+        all_bad = self.branch()
+        for n in all_bad["nodes"]:
+            n["anchors"] = [{"page": 2, "quote": "this sentence is not in the paper at all"}]
+        res, _ = self.go(F(self.top(), all_bad, all_bad, all_bad), force=True)
+        self.assertEqual({n["id"] for n in res.graph["nodes"]}, {"problem", "result"})
 
     def test_branch_cannot_write_outside_itself(self):  # TM-26
         b = self.branch()
@@ -475,24 +482,59 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
         self.assertTrue(res.ok, res.report)
         self.assertEqual(len(res.graph["nodes"]), 2)  # khung đã đạt được giữ
 
-    def test_branch_still_failing_is_dropped(self):
+    def test_third_tier_waits_for_calls_left_for_the_audit(self):  # đo 23/10: tầng thứ ba ăn hết trần, không đối chiếu
+        b = self.branch()
+        b["expand"] = ["r.claim"]
+        sub = {"nodes": [{"id": "r.c.a", "kind": "concept", "label": "Một",
+                          "anchors": [{"page": 2, "quote": "a measured speedup of four times"}]}], "edges": []}
+        for reserve, opened in ((31, False), (0, True)):
+            fake = F(self.top(), b, sub)
+            with mock.patch.object(build, "RESERVE_CALLS", reserve):
+                res, _ = self.go(fake, max_calls=32, force=True)
+            asked = [m["content"] for body in fake.bodies for m in body["messages"][-1:]]
+            self.assertEqual(any("TẦNG DƯỚI của ô `r.claim`" in a for a in asked), opened)
+            self.assertTrue(any("Đối chiếu đúng MỘT câu" in a for a in asked))  # lượt đối chiếu vẫn chạy
+            self.assertEqual(any("không mở r.claim: để dành lượt" in x for x in res.log), not opened)
+
+    def test_cell_still_failing_is_dropped_from_its_branch(self):  # đo 23/10: nhánh 9 ô bị bỏ vì 1 lỗi
         bad = self.branch()
         bad["nodes"][0]["anchors"] = [{"page": 2, "quote": "this sentence is not in the toy paper at all"}]
         fake = F(self.top(), bad, bad)
         res, path = self.go(fake, rounds=1)
-        self.assertTrue(res.ok, res.report)  # khung đạt, nhánh hỏng bị bỏ thay vì kéo cả sơ đồ thành nháp
-        self.assertEqual(len(res.graph["nodes"]), 2)  # chỉ khung
-        self.assertTrue(any("bỏ nhánh result" in m for m in res.log))
+        self.assertTrue(res.ok, res.report)  # khung đạt, ô hỏng bị bỏ thay vì kéo cả sơ đồ thành nháp
+        self.assertEqual({n["id"] for n in res.graph["nodes"]}, {"problem", "result", "r.fig"})
+        self.assertNotIn("r.claim", {e["to"] for e in res.graph["edges"]})
+        self.assertTrue(any("bỏ ô r.claim" in m for m in res.log), res.log)
+        self.assertTrue(any("1 lỗi (PG201)" in m for m in res.log), res.log)  # log nêu mã lỗi
         self.assertIn("PG201", fake.bodies[2]["messages"][-1]["content"])  # lỗi của nhánh được gửi lại cho nó
+
+    def test_bad_quote_is_dropped_when_the_cell_has_a_good_one(self):
+        b = self.branch()
+        b["nodes"][0]["anchors"].append({"page": 2, "quote": "this sentence is not in the toy paper at all"})
+        res, _ = self.go(F(self.top(), b, b, b))
+        self.assertTrue(res.ok, res.report)
+        claim = next(n for n in res.graph["nodes"] if n["id"] == "r.claim")
+        self.assertEqual([a["quote"] for a in claim["anchors"]], ["a measured speedup of four times"])
 
     def test_skeleton_failing_stops_with_a_draft(self):
         bad = self.top()
         bad["nodes"][0]["anchors"] = [{"page": 1, "quote": "this sentence is not in the toy paper at all"}]
-        fake = F(bad, bad)
+        fake = F(bad, bad, bad, bad)
         res, path = self.go(fake, rounds=1)
         self.assertFalse(res.ok)
         self.assertEqual(path, self.d / "toy.graph.draft.json")
-        self.assertEqual(len(fake.bodies), 2)  # không mở nhánh nào trên một khung còn lỗi
+        self.assertEqual(len(fake.bodies), 4)  # khung, sửa, xin lại khung, sửa; không mở nhánh nào trên khung còn lỗi
+        self.assertTrue(any("xin lại khung từ đầu" in m for m in res.log))
+        self.assertNotIn("Kết quả của bộ kiểm", str(fake.bodies[2]["messages"]))  # lần xin lại không kèm lịch sử sửa
+
+    def test_skeleton_asked_again_from_scratch(self):  # đo 23/10: Ignored lần 3 dừng ở khung
+        bad = self.top()
+        bad["nodes"][0]["anchors"] = [{"page": 1, "quote": "this sentence is not in the toy paper at all"}]
+        fake = F(bad, bad, self.top(), self.branch())
+        res, path = self.go(fake, rounds=1)
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual(path, self.d / "toy.graph.json")
+        self.assertEqual({n["id"] for n in res.graph["nodes"]}, {"problem", "result", "r.claim", "r.fig"})
 
     def test_resent_skeleton_is_data_with_node_fields_only(self):  # TM-28
         t = self.top()

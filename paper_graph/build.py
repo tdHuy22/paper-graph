@@ -858,6 +858,8 @@ REVIEW_CODES = ("PG305", "PG309")  # tuyên bố thiếu bằng chứng, bảng 
 MAX_CALLS = 32  # trần số lượt gọi mặc định của chế độ theo tầng (TM-27); cờ `--max-calls` tối đa 40. Đo 2026-10-21:
 # một bài cần 13–20 lượt để chạy đủ khung, mở 5–6 ô và lượt soát; đối chiếu từng câu tuyên bố thêm tới 6–12 lượt
 MAX_EXPAND_DEPTH = 2  # mở tới tầng thứ 3 (tầng đầu là 0): đúng độ sâu tối đa của bộ kiểm
+RESERVE_CALLS = 8  # lượt để dành cho lượt soát và đối chiếu: gần trần thì thôi mở tầng thứ ba (đo 23/10: RAG lần 4 mở 9
+# ô con của phương pháp, chạm trần 32, không còn lượt đối chiếu)
 WORKERS = 4  # lượt mở nhánh, đối chiếu chạy cùng lúc (`--workers`); model free trên OpenRouter cho 20 lượt mỗi phút
 _FIELDS = ("id", "parent", "kind", "label", "term", "explain")
 
@@ -1033,13 +1035,14 @@ def _checked(job: _Job, doc: dict):
 _ANCHOR_CODES = ("PG201", "PG202", "PG204", "PG205")  # neo không có thật hay không dùng được
 
 
-def _drop_pg220(part: dict, diags: list) -> list[str]:
-    """Bỏ khỏi một phần đúng các ô, cạnh, nhóm còn PG220 (số không có trong đoạn được neo, TM-7) và cạnh, thành viên nhóm,
-    `expand` trỏ tới ô đã bỏ: một ô còn số lạ sau các lượt sửa không kéo cả nhánh 9 ô đi theo (RAG 23/10: nhánh kết quả
-    0 lỗi, 1 PG220 sau 3 lượt sửa, bị bỏ cả nhánh). Trả nhãn những thứ đã bỏ."""
+def _drop_flagged(part: dict, diags: list) -> list[str]:
+    """Bỏ khỏi một phần đúng các ô, cạnh, nhóm còn lỗi hay PG220 (số không có trong đoạn được neo, TM-7), cùng cạnh, thành
+    viên nhóm, `expand` trỏ tới ô đã bỏ: một ô hỏng sau các lượt sửa không kéo cả nhánh 9 ô đi theo (đo 23/10: nhánh kết
+    quả bị bỏ 3/10 lần, lần nào lượt sửa cuối cũng chỉ còn 1 lỗi). Lỗi không gắn với ô, cạnh hay nhóm (của cả tầng, dạng
+    file) thì không bỏ được gì: lần kiểm lại vẫn thấy. Trả nhãn những thứ đã bỏ."""
     nodes, edges, groups = set(), set(), set()
     for d in diags:
-        if d.code != "PG220":
+        if d.level != "error" and d.code != "PG220":
             continue
         w = d.where.split(" · ")[0]
         if w.startswith("ô "):
@@ -1234,7 +1237,9 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             mine = [d for d in rep.diags if _touches(d, ids, gids, parent)]
             n_err = sum(d.level == "error" for d in mine)
             n220 = sum(d.code == "PG220" for d in mine)
-            res.log.append(f"{name}: {len(part['nodes'])} ô, {n_err} lỗi, {n220} PG220, tiền tới giờ {res.cost:.3f} USD")
+            codes = sorted({d.code for d in mine if d.level == "error"})
+            res.log.append(f"{name}: {len(part['nodes'])} ô, {n_err} lỗi" + (f" ({', '.join(codes)})" if codes else "")
+                           + f", {n220} PG220, tiền tới giờ {res.cost:.3f} USD")
             say(res.log[-1])
             note = ("Kết quả của bộ kiểm cho phần ở trên:\n"
                     + render(Report(mine, rep.stats), title)
@@ -1246,21 +1251,30 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
         return salvage(best, doc, parent, label)
 
     def salvage(best: tuple | None, doc: dict, parent: str | None, label: str) -> tuple[dict | None, bool]:
-        """Phần chưa đạt sau các lượt sửa: nếu chỉ còn PG220 (0 lỗi) thì bỏ đúng ô còn số lạ, phần còn lại sạch thì nhận."""
-        if best is None or best[0] or not best[1]:
+        """Phần chưa đạt sau các lượt sửa: bỏ riêng câu trích hỏng của ô còn câu trích tốt khác, rồi bỏ đúng ô, cạnh, nhóm
+        còn lỗi hay PG220; phần còn lại sạch thì nhận. Không bao giờ nhận phần còn lỗi hay PG220 (lần kiểm lại cuối). Chỉ
+        cho nhánh: khung thiếu một ô tầng đầu thì mất cả nhánh dưới nó mà không ai thấy, nên khung hỏng vẫn thành nháp."""
+        if best is None or parent is None:
             return (best[2], False) if best is not None else (None, False)
-        part = {k: list(v) for k, v in best[2].items()}
-        _, rep = checked(_merge(doc, part))
-        ids = {n["id"] for n in part["nodes"]}
-        gone = _drop_pg220(part, [d for d in rep.diags if _touches(d, ids, {g["id"] for g in part["groups"]}, parent)])
-        if not part["nodes"]:
+        part = {k: [dict(x) if isinstance(x, dict) else x for x in v] for k, v in best[2].items()}
+
+        def flagged() -> list:
+            _, rep = checked(_merge(doc, part))
+            ids, gids = {n["id"] for n in part["nodes"]}, {g["id"] for g in part["groups"]}
+            return [d for d in rep.diags if (d.level == "error" or d.code == "PG220") and _touches(d, ids, gids, parent)]
+
+        anchors = _drop_bad_anchors(part, flagged())
+        gone: list[str] = []
+        for _ in range(3):  # bỏ một ô có thể lộ lỗi mới (nhãn cạnh mất nguồn số): bỏ tiếp, tới khi sạch hay không bỏ được gì
+            bad = flagged()
+            dropped = _drop_flagged(part, bad) if bad else []
+            if not dropped:
+                break
+            gone += dropped
+        if not part["nodes"] or flagged():
             return best[2], False
-        _, rep = checked(_merge(doc, part))
-        ids = {n["id"] for n in part["nodes"]}
-        mine = [d for d in rep.diags if _touches(d, ids, {g["id"] for g in part["groups"]}, parent)]
-        if any(d.level == "error" or d.code == "PG220" for d in mine):
-            return best[2], False
-        res.log.append(f"{label}: bỏ {', '.join(gone)} (còn số không có trong đoạn được neo), giữ {len(ids)} ô")
+        res.log.append(f"{label}: bỏ " + ", ".join(gone + ([f"{anchors} câu trích hỏng"] if anchors else []))
+                       + f" (còn lỗi hay số không có trong đoạn được neo), giữ {len(part['nodes'])} ô")
         say(res.log[-1])
         return part, True
 
@@ -1357,10 +1371,18 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
     top = None
     top_ok = False
     try:
-        top, top_ok = step("Dựng TẦNG ĐẦU của sơ đồ: 5–7 ô (`parent: null`) và các cạnh giữa chúng. Không cần "
-                           "`expand`: chương trình sẽ mở mọi ô tầng đầu trừ ô vấn đề (`kind: problem`), nên ô nào "
-                           "cũng phải có điều đáng mở."
-                           + need(None), None, "khung")
+        skeleton = ("Dựng TẦNG ĐẦU của sơ đồ: 5–7 ô (`parent: null`) và các cạnh giữa chúng. Không cần `expand`: chương "
+                    "trình sẽ mở mọi ô tầng đầu trừ ô vấn đề (`kind: problem`), nên ô nào cũng phải có điều đáng mở."
+                    + need(None))
+        top, top_ok = step(skeleton, None, "khung")
+        if not top_ok and not stopped:
+            # Lượt sửa có khi làm hỏng thêm câu trích (đo 23/10: Ignored lần 3, câu trả lời đầu 0 lỗi 4 PG220, ba lượt sửa
+            # đều có lỗi neo): xin lại khung từ đầu một lần, không kèm lịch sử sửa. Khung không được cứu từng ô.
+            res.log.append("khung còn lỗi sau các lượt sửa: xin lại khung từ đầu một lần")
+            say(res.log[-1])
+            again, again_ok = step(skeleton, None, "khung lần 2")
+            if again_ok or top is None:
+                top, top_ok = again, again_ok
         merged = _merge(merged, top)
         if stopped:
             raise stopped[0]
@@ -1393,9 +1415,20 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
                 res.log.append(f"bỏ nhánh {target}: còn lỗi" + ("" if stopped else f" sau {rounds} lượt sửa"))
                 say(res.log[-1])
 
-        if workers <= 1:
-            while todo and not stopped:
+        skipped: list[str] = []
+
+        def next_branch() -> tuple[str, int] | None:
+            """Nhánh kế tiếp trong hàng đợi; tầng thứ ba thì chỉ khi còn hơn `RESERVE_CALLS` lượt trước trần."""
+            while todo:
                 target, depth = todo.popleft()
+                if depth < 2 or max_calls is None or caller.calls < max_calls - RESERVE_CALLS:
+                    return target, depth
+                skipped.append(target)
+            return None
+
+        if workers <= 1:
+            while not stopped and (nxt := next_branch()) is not None:
+                target, depth = nxt
                 snap = merged
                 part, ok = step(task_for(target, depth), target, f"mở {target}", snap)
                 landed(target, depth, snap, part, ok)
@@ -1403,8 +1436,8 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             pool, running, sent = _Pool(workers), {}, 0  # running: future → (thứ tự gửi, ô, độ sâu, sơ đồ lúc gửi)
             try:
                 while todo or running:
-                    while todo and len(running) < workers and not stopped:
-                        target, depth = todo.popleft()
+                    while len(running) < workers and not stopped and (nxt := next_branch()) is not None:
+                        target, depth = nxt
                         running[pool.submit(step, task_for(target, depth), target, f"mở {target}", merged)] = (
                             sent, target, depth, merged)
                         sent += 1
@@ -1419,6 +1452,10 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
                 raise
             finally:
                 pool.close()
+        if skipped:
+            res.log.append(f"không mở {', '.join(skipped[:9])}: để dành lượt cho soát và đối chiếu (đã gọi {caller.calls}, "
+                           f"trần {max_calls})")
+            say(res.log[-1])
         if stopped:
             raise stopped[0]
         if top_ok:

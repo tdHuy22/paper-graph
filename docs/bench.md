@@ -413,3 +413,43 @@ Mỗi ô: phủ ý bắt buộc, đúng tầng, quan hệ, soi.
   tuỳ tải của nhà cung cấp; chậm nhất vẫn là từng lượt của Dots 3 (1–3 phút).
 - Biến động giữa hai lần cùng bài: 0–1 ý phủ, 0–8 điểm tầng, 0–20 điểm quan hệ; đọc chênh lệch dưới mức này giữa hai cấu
   hình là nhiễu.
+
+### Đối chiếu bằng model free thứ hai (2026-10-23, việc 8.2)
+
+Câu hỏi: cho model free thứ hai đối chiếu lại từng câu tuyên bố có thêm điểm soi không (đối chiếu chéo hai model). Cách đo:
+Nemotron 3.5 (`nvidia/nemotron-3.5-super-vl:free`) chạy riêng lượt đối chiếu (`_claims`, `AUDIT_CLAIM`, như `build`) trên
+10 sơ đồ Dots 3 ở mục trên, vốn đã qua lượt đối chiếu của Dots (`.tmp/build/2026-10-23-soi2/run.py`).
+
+- 38 câu tuyên bố, 43 lượt gọi, không lỗi API. Thêm được 2 ô (RAG lần 2, Ignored lần 2), không ô nào chạm điểm soi:
+  soi 9/34 → 9/34, không điểm nào mới đạt hay mất.
+- Kết luận: không thêm đối chiếu bằng model thứ hai vào `build`; gấp đôi lượt của phần đối chiếu mà không thêm gì. Điểm
+  soi của model free còn thấp vì model không thấy chỗ lệch (trả "không lệch"), không phải vì một model bỏ sót mà model
+  kia thấy.
+
+## Cứu từng ô, để dành lượt, xin lại khung (2026-10-23 chiều, việc 8.1)
+
+Ở lần đo trên, nhánh kết quả bị bỏ cả nhánh 3/10 lần, lần nào lượt sửa cuối cũng chỉ còn 1 lỗi. Sửa: ở nhánh, `salvage` bỏ
+câu trích hỏng của ô còn câu trích tốt rồi bỏ đúng ô, cạnh, nhóm còn lỗi hay PG220 (khung không cứu từng ô). Đo lại 5 bài × 2
+lần với code đó (`.tmp/build/2026-10-23-measure2/`, lần 3, 4), cùng cách như mục trên; hai lần chạy cùng lúc.
+
+| Bài | Lần 3 | Lần 4 |
+|---|---|---|
+| RAG | 14/14, 100%, 100%, 1/4 · 20 lượt, 23 phút | 13/14, 86%, 60%, 0/4 · 32 lượt (chạm trần), 14 phút |
+| DataSentinel | 13/13, 100%, 80%, 1/2 · 11 lượt, 8 phút | 13/13, 100%, 100%, 1/2 · 20 lượt, 22 phút |
+| Prism | 12/13, 92%, 83%, 0/3 · 20 lượt, 18 phút | 13/13, 100%, 100%, 0/3 · 24 lượt, 22 phút |
+| Ignored | nháp (khung còn lỗi): 10/14 trên 7 ô khung | 13/14, 93%, 57%, 1/4 · 24 lượt, 26 phút |
+| Merging | 12/13, 92%, 86%, 0/4 · 18 lượt, 10 phút | 11/13, 62%, 43%, 2/4 · 19 lượt, 11 phút |
+
+- Không nhánh nào bị bỏ cả (lần 1, 2: 3/10); bước cứu dùng 8 lần ở 5 sơ đồ, giữ 2–9 ô mỗi lần.
+- Độ phủ 124/134 (93%), thấp hơn lần 1, 2 (131/134) vì ba kiểu hỏng khác, mỗi kiểu một lần:
+  - RAG lần 4: model đánh dấu cả 9 ô con của phương pháp cần mở, các lượt tầng thứ ba ăn hết trần 32, không còn lượt
+    soát và đối chiếu. Sửa: `RESERVE_CALLS` (8), gần trần thì thôi mở tầng thứ ba.
+  - Ignored lần 3: câu trả lời khung đầu tiên 0 lỗi 4 PG220, ba lượt sửa đều làm hỏng câu trích, lần chạy dừng ở khung,
+    chỉ ra nháp. Sửa: khung còn lỗi thì xin lại khung từ đầu một lần, không kèm lịch sử sửa.
+  - Merging lần 4: ô kết quả tầng đầu neo câu khác câu của đáp án và không ô con nào khớp ý `result`, nên mọi ý dưới kết
+    quả bị chấm sai tầng và mọi quan hệ tới kết quả trượt (tầng 62%, quan hệ 43%). Đây là giới hạn của bộ chấm (một ý tầng
+    đầu không khớp kéo tụt cả nhánh của nó), không sửa luật chấm theo lần đo này.
+- Kiểm lại hai bản sửa bằng chạy thật, mỗi bản một lần (`.tmp/build/2026-10-23-measure3/`): RAG với phần để dành lượt
+  14/14, 100%, 100%, 0/4, 22 lượt; Ignored với code cuối 14/14, 100%, 57%, 1/4, 31 lượt (khung đạt sau 1 lượt sửa, bước
+  cứu giữ 2 ô của nhánh `idea`). Một lần chạy mỗi bản: chỉ cho thấy đường chạy thật không hỏng, không đo được tác dụng.
+- Điểm soi 7/34 (lần 1, 2: 9/34): trong mức dao động; đối chiếu không đổi giữa hai bản code.
