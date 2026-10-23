@@ -1,11 +1,16 @@
 """Dựng sơ đồ qua API (build.py), với hàm gọi OpenRouter giả: TM-21..TM-25 ở `.agent/threat-model.md`."""
+import contextlib
+import io
 import json
 import os
 import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
+from paper_graph import blocks as blocks_mod
 from paper_graph import build
 from paper_graph.files import format_graph
 
@@ -424,6 +429,26 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
         self.assertIn("TẦNG DƯỚI của ô `result`", second[-1])
         self.assertEqual(res.rounds, 3)
 
+    def test_only_the_cell_with_a_made_up_number_is_dropped(self):  # TM-7: PG220 còn sau mọi lượt sửa
+        b = self.branch()
+        b["nodes"].append({"id": "r.bad", "kind": "claim", "label": "Nhanh hơn 99 lần",
+                           "anchors": [{"page": 2, "quote": "a measured speedup of four times"}]})
+        b["edges"].append({"from": "r.fig", "to": "r.bad", "kind": "supports", "strength": "weak"})
+        res, path = self.go(F(self.top(), b, b, b))
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual(path, self.d / "toy.graph.json")
+        ids = {n["id"] for n in res.graph["nodes"]}
+        self.assertEqual(ids, {"problem", "result", "r.claim", "r.fig"})
+        self.assertNotIn("r.bad", {e["to"] for e in res.graph["edges"]})
+        self.assertTrue(any("bỏ ô r.bad" in x for x in res.log), res.log)
+
+    def test_branch_with_an_error_is_still_dropped_whole(self):
+        b = self.branch()
+        b["nodes"][0]["anchors"] = [{"page": 2, "quote": "this sentence is not in the paper at all"}]
+        res, _ = self.go(F(self.top(), b, b, b))
+        self.assertEqual({n["id"] for n in res.graph["nodes"]}, {"problem", "result"})
+        self.assertTrue(any("bỏ nhánh result" in x for x in res.log), res.log)
+
     def test_branch_cannot_write_outside_itself(self):  # TM-26
         b = self.branch()
         b["nodes"][0]["parent"] = "idea"  # model đặt sang nhánh khác
@@ -668,6 +693,13 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
             self.assertEqual((seen["mode"], "max_calls" in seen), ("one-shot", False))
             cli.main(["build", str(self.bp), "--model", "test/model", "--max-calls", "9"])
             self.assertEqual((seen["mode"], seen["max_calls"]), ("tiers", 9))
+            self.assertEqual(seen["workers"], build.WORKERS)  # mặc định của CLI là song song
+            cli.main(["build", str(self.bp), "--model", "test/model", "--workers", "1"])
+            self.assertEqual(seen["workers"], 1)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertNotEqual(cli.main(["build", str(self.bp), "--workers", "9"]), 0)
+        self.assertIn("--workers", err.getvalue())
 
     def test_program_opens_every_top_node_but_the_problem(self):  # đo 2026-10-20: model chỉ đánh dấu 2–3 ô
         t = self.top(expand=())  # khung không đánh dấu gì, ô kết quả vẫn được mở
@@ -695,6 +727,517 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Router:
+    """Model giả trả theo nội dung tin nhắn cuối (dựng song song: thứ tự gọi không cố định). `meet`: các lượt có chữ này
+    chờ nhau ở một barrier, nên test chỉ qua khi chúng thật sự chạy cùng lúc."""
+
+    def __init__(self, route, meet=None, parties=2):
+        self.route = route
+        self.bodies = []
+        self.mu = threading.Lock()
+        self.meet = meet
+        self.barrier = threading.Barrier(parties, timeout=5)
+
+    def __call__(self, url, body, key):
+        assert url == build.API + "/chat/completions"
+        with self.mu:
+            self.bodies.append(json.loads(json.dumps(body)))
+        last = body["messages"][-1]["content"]
+        if self.meet and self.meet in last:
+            self.barrier.wait()
+        a = self.route(last)
+        if isinstance(a, Exception):
+            raise a
+        return reply(a if isinstance(a, str) else json.dumps(a, ensure_ascii=False))
+
+
+class Parallel(unittest.TestCase):  # workers > 1: nhánh, câu tuyên bố chạy cùng lúc; trần lượt, trần tiền vẫn giữ
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self.tmp.name)
+        self.bp = self.d / "toy.blocks.json"
+        self.bp.write_text(json.dumps(blocks()), encoding="utf-8")
+        self.log = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def go(self, fake, **kw):
+        kw.setdefault("workers", 3)
+        return build.build(self.bp, "test/model", 2, kw.pop("max_usd", 0.5), key=KEY, post=fake, prices=(1e-7, 5e-7),
+                           say=self.log.append, mode="tiers", **kw)
+
+    @staticmethod
+    def top():
+        g = graph()
+        return {"nodes": [n for n in g["nodes"] if n["parent"] is None], "edges": g["edges"][:2]}
+
+    @staticmethod
+    def branches():
+        """Hai nhánh cùng đặt id `x1`, vì mỗi nhánh không thấy nhánh kia."""
+        idea = {"nodes": [{"id": "x1", "kind": "step", "label": "Mọi token cùng lúc",
+                           "anchors": [{"page": 1, "quote": "which processes all tokens at once"}]},
+                          {"id": "x2", "kind": "step", "label": "Một phép chiếu",
+                           "anchors": [{"page": 2, "quote": "for every token, and the end of this"}]}],
+                "edges": [{"from": "x1", "to": "x2", "kind": "flow"}]}
+        result = {"nodes": [{"id": "x1", "kind": "claim", "label": "Nhanh hơn",
+                             "anchors": [{"page": 2, "quote": "a measured speedup of four times"}]},
+                            {"id": "r.fig", "kind": "evidence", "label": "Hình 1", "figure": "p2-f1",
+                             "anchors": [{"page": 2, "quote": "Throughput of the flat widget compared"}]}],
+                  "edges": [{"from": "r.fig", "to": "x1", "kind": "supports", "strength": "strong"}]}
+        return idea, result
+
+    def route(self, last):
+        idea, result = self.branches()
+        if "TẦNG ĐẦU" in last:
+            return self.top()
+        if "TẦNG DƯỚI của ô `idea`" in last:
+            return idea
+        if "TẦNG DƯỚI của ô `result`" in last:
+            return result
+        return {"additions": []}
+
+    def test_branches_run_together_and_clashing_ids_are_renamed(self):
+        fake = Router(self.route, meet="TẦNG DƯỚI")
+        res, path = self.go(fake)
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual(path, self.d / "toy.graph.json")
+        nodes = {n["id"]: n for n in res.graph["nodes"]}
+        clash = {nodes[x]["parent"]: x for x in ("x1", "x1-2")}  # nhánh nào gộp trước giữ `x1`
+        self.assertEqual(set(clash), {"idea", "result"})
+        edges = {(e["from"], e["to"]) for e in res.graph["edges"]}
+        self.assertIn(("r.fig", clash["result"]), edges)  # cạnh theo id mới
+        self.assertIn((clash["idea"], "x2"), edges)
+        self.assertTrue(any("đổi id trùng" in x for x in res.log), self.log)
+        self.assertEqual(res.rounds, len(fake.bodies))
+
+    def test_one_worker_runs_in_the_main_thread(self):
+        """Tuần tự như trước khi có chạy song song: Ctrl+C tới đúng luồng đang gửi và dừng ngay."""
+        where = set()
+
+        def route(last):
+            where.add(threading.current_thread() is threading.main_thread())
+            return self.route(last)
+        res, _ = self.go(Router(route), workers=1)
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual(where, {True})
+
+    def test_one_worker_never_overlaps(self):
+        fake = Router(self.route, meet="TẦNG DƯỚI")
+        with self.assertRaises(threading.BrokenBarrierError):
+            fake.barrier = threading.Barrier(2, timeout=0.2)
+            self.go(fake, workers=1)
+
+    def test_call_cap_holds_across_threads(self):  # TM-27
+        for cap in (1, 2, 3):
+            fake = Router(self.route)
+            res, _ = self.go(fake, max_calls=cap, workers=4, force=True)
+            self.assertEqual(len(fake.bodies), cap)
+            self.assertTrue(any("dừng trước" in x for x in res.log), res.log)
+
+    def test_money_cap_waits_for_calls_still_waiting(self):  # TM-22
+        """Lượt mới chỉ vượt trần vì lượt khác đang giữ chỗ thì chờ lượt đó xong, rồi tính lại theo tiền thật."""
+        for real, sends in ((0.0, 2), (0.03, 1)):
+            started, release = threading.Event(), threading.Event()
+            posts = []
+
+            def slow(url, body, key):
+                posts.append(1)
+                if len(posts) == 1:
+                    started.set()
+                    release.wait(5)
+                return reply("{}", cost=real)
+
+            # mỗi lượt ước ~0,043 USD (chủ yếu là phần trả lời tối đa): trần 0,06 vừa một lượt, không vừa hai
+            caller = build._Caller("test/model", KEY, slow, build.ModelInfo(1e-6, 1e-6), 0.06, False, lambda m: None)
+            msgs = [{"role": "user", "content": "x" * 4000}]
+            out = []
+
+            def second():
+                try:
+                    out.append(caller.ask(msgs, "hai"))
+                except build._Stop as e:
+                    out.append(e)
+
+            t1 = threading.Thread(target=caller.ask, args=(msgs, "một"))
+            t1.start()
+            started.wait(5)
+            t2 = threading.Thread(target=second)
+            t2.start()
+            t2.join(0.3)
+            self.assertEqual((len(posts), t2.is_alive()), (1, True))  # lượt hai chờ, chưa gửi
+            release.set()
+            t1.join(5)
+            t2.join(5)
+            self.assertEqual(len(posts), sends, real)
+            self.assertEqual(isinstance(out[0], build._Stop), sends == 1)
+            self.assertEqual(caller.pending, 0)
+
+    def test_cancel_stops_calls_not_yet_sent(self):  # Ctrl+C ở luồng chính khi chạy song song
+        caller = build._Caller("test/model", KEY, lambda *a: reply("{}"), build.ModelInfo(0, 0), 0.5, False,
+                               lambda m: None)
+        caller.cancel.set()
+        with self.assertRaises(build._Stop):
+            caller.ask([{"role": "user", "content": "x"}], "một")
+        self.assertEqual(caller.calls, 0)
+
+    def test_ctrl_c_returns_without_waiting_for_running_branches(self):
+        """KeyboardInterrupt ở luồng chính thoát ngay; lượt đang chờ trong luồng khác không làm tiến trình đợi, và không
+        lượt nào được gửi thêm sau đó."""
+        gate = threading.Event()
+        sent = []
+
+        def route(last):
+            sent.append(last[:20])
+            if "TẦNG DƯỚI" in last:
+                gate.wait(5)
+            return self.route(last)
+
+        fake = Router(route)
+        real_wait = build.wait
+
+        def wait_then_interrupt(*a, **kw):
+            raise KeyboardInterrupt
+
+        with mock.patch.object(build, "wait", wait_then_interrupt), self.assertRaises(KeyboardInterrupt):
+            self.go(fake)
+        n = len(sent)
+        gate.set()
+        threading.Event().wait(0.3)
+        self.assertLessEqual(len(sent), n)  # lượt đang dở trả lời xong thì thôi, không có lượt sửa hay nhánh mới
+        self.assertIs(build.wait, real_wait)
+
+    def test_two_timeouts_do_not_wait_for_each_other(self):  # TM-22: review lượt 2, từng treo vô hạn
+        barrier = threading.Barrier(2, timeout=5)
+        posts = []
+
+        def post(url, body, key):
+            posts.append(1)
+            barrier.wait()  # cả hai lượt đang chờ trả lời cùng lúc
+            raise build.BuildError("hết giờ chờ OpenRouter: timed out")
+
+        # mỗi lượt ước ~0,043 USD: hai lượt vừa trần 0,1; sau khi cả hai hết giờ (đã tính tiền), thử lại thì vượt
+        caller = build._Caller("test/model", KEY, post, build.ModelInfo(1e-6, 1e-6), 0.1, False, lambda m: None)
+        errs = []
+
+        def one():
+            try:
+                caller.ask([{"role": "user", "content": "x" * 4000}], "l")
+            except build.BuildError as e:
+                errs.append(e)
+
+        ts = [threading.Thread(target=one) for _ in range(2)]
+        with mock.patch.object(build.time, "sleep"):
+            for t in ts:
+                t.start()
+            for t in ts:
+                t.join(5)
+        self.assertEqual([t.is_alive() for t in ts], [False, False])
+        self.assertEqual((len(errs), len(posts), caller.pending), (2, 2, 0))
+
+    def test_retry_after_other_threads_used_the_cap_is_not_sent(self):  # TM-27
+        posts, mu = [], threading.Lock()
+        others_done = threading.Event()
+
+        def post(url, body, key):
+            with mu:
+                posts.append(body["messages"][0]["content"])
+            if body["messages"][0]["content"] == "a":
+                raise build.BuildError("OpenRouter trả 503: bận")
+            return reply("{}", cost=0.0)
+
+        caller = build._Caller("test/model", KEY, post, build.ModelInfo(0, 0), 0.5, False, lambda m: None, max_calls=3)
+        errs = []
+
+        def a():
+            try:
+                caller.ask([{"role": "user", "content": "a"}], "a")
+            except build.BuildError as e:
+                errs.append(e)
+
+        with mock.patch.object(build.time, "sleep", lambda s: others_done.wait(5)):
+            t = threading.Thread(target=a)
+            t.start()  # lượt a hỏng, chờ để thử lại
+            while not posts:
+                threading.Event().wait(0.01)
+            caller.ask([{"role": "user", "content": "b"}], "b")
+            caller.ask([{"role": "user", "content": "b"}], "b")  # hai lượt b dùng hết trần trong lúc a chờ
+            others_done.set()
+            t.join(5)
+        self.assertEqual((len(posts), caller.calls), (3, 3))
+        self.assertEqual(len(errs), 1)
+
+    def test_fallback_switch_happens_once_across_threads(self):
+        calls = []
+        mu = threading.Lock()
+        barrier = threading.Barrier(2, timeout=5)
+
+        def post(url, body, key):
+            with mu:
+                calls.append(body["model"])
+            if body["model"] == "a:free":
+                barrier.wait()  # cả hai luồng cùng hỏng ở model chính
+                raise build.BuildError("OpenRouter trả 400: hỏng")
+            return reply("{}", cost=0.0)
+
+        caller = build._Caller("a:free", KEY, post, build.ModelInfo(0, 0), 0.5, True, lambda m: None,
+                               fallbacks=["b:free", "c:free"])
+        ts = [threading.Thread(target=caller.ask, args=([{"role": "user", "content": "x"}], f"l{i}")) for i in (1, 2)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(10)
+        self.assertEqual((caller.model, caller.fallbacks), ("b:free", ["c:free"]))
+        self.assertEqual(sorted(calls), ["a:free", "a:free", "b:free", "b:free"])
+
+    def test_claims_of_one_section_run_together(self):
+        b = blocks()
+        b["blocks"][1]["text"] += " The flat widget is 4 times faster than recurrent widgets on every benchmark."
+        self.bp.write_text(json.dumps(b), encoding="utf-8")
+        claims = build._claims(blocks_mod.parse(b)[0])
+        self.assertEqual(len(claims), 2)
+
+        def route(last):
+            if "TẦNG ĐẦU" in last:
+                return Tiers.top()
+            if "TẦNG DƯỚI" in last:
+                return Tiers.branch()
+            if "Đối chiếu đúng MỘT câu" in last:
+                return {"additions": [{"parent": "result", "nodes": [
+                    {"id": "r.gap", "kind": "evidence", "label": "Chữ và hình lệch",
+                     "explain": "Chỗ lệch: chữ nói nhanh hơn, hình chỉ đo thông lượng",
+                     "anchors": [{"page": 2, "quote": "Throughput of the flat widget compared"}]}],
+                    "edges": [{"from": "r.gap", "to": "r.claim", "kind": "contradicts", "strength": "moderate"}]}]}
+            return {"additions": []}
+
+        fake = Router(route, meet="Đối chiếu đúng MỘT câu")
+        res, _ = self.go(fake)
+        self.assertTrue(res.ok, res.report)
+        ids = {n["id"] for n in res.graph["nodes"]}
+        self.assertTrue({"r.gap", "r.gap-2"} <= ids, ids)
+        quotes = {n["id"]: n["anchors"][0]["quote"] for n in res.graph["nodes"] if n["id"].startswith("r.gap")}
+        self.assertEqual(len(set(quotes.values())), 2)  # mỗi ô neo về câu tuyên bố của lượt mình
+
+
+class FakeOllama:
+    """Máy chủ HTTP thật trên 127.0.0.1 nói API kiểu OpenAI: trả theo `route(tin nhắn cuối)`, ghi header và thân nhận được."""
+
+    def __init__(self, route, prompt_tokens=None, models=("qwen3:8b",)):
+        self.route, self.seen, self.prompt_tokens, self.models = route, [], prompt_tokens, list(models)
+        self.reject_format = False
+        self.redirect = False
+        self.ctx = None  # độ dài ngữ cảnh báo ở /api/ps (Ollama); None: không có đường này (404)
+        self.tokens = None  # hàm (ký tự đã gửi) → prompt_tokens; None: ký tự / 4
+        outer = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                if self.path.endswith("/v1/models"):
+                    return self._send(200, {"object": "list", "data": [{"id": m} for m in outer.models]})
+                if self.path == "/api/ps" and outer.ctx:
+                    return self._send(200, {"models": [{"name": m, "model": m, "context_length": outer.ctx}
+                                                       for m in outer.models]})
+                self._send(404, {"error": "không có"})
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                outer.seen.append((dict(self.headers), body))
+                if outer.redirect:
+                    self.send_response(302)
+                    self.send_header("Location", "http://example.com/v1/chat/completions")
+                    self.end_headers()
+                    return
+                if outer.reject_format and "response_format" in body:
+                    return self._send(400, {"error": {"message": "'response_format.type' must be 'json_schema'"}})
+                a = outer.route(body["messages"][-1]["content"])
+                sent = sum(len(m["content"]) if isinstance(m["content"], str) else len(m["content"][0]["text"])
+                           for m in body["messages"])
+                self._send(200, {"choices": [{"message": {"content": json.dumps(a, ensure_ascii=False)},
+                                              "finish_reason": "stop"}],
+                                 "usage": {"prompt_tokens": outer.tokens(sent) if outer.tokens else
+                                           outer.prompt_tokens or sent // 4, "completion_tokens": 10}})
+
+            def _send(self, code, obj):
+                data = json.dumps(obj).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class Local(unittest.TestCase):  # `build --local`: TM-29..TM-32
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self.tmp.name)
+        self.bp = self.d / "toy.blocks.json"
+        self.bp.write_text(json.dumps(blocks()), encoding="utf-8")
+        self.log = []
+        self.srv = FakeOllama(Parallel.route.__get__(Parallel()))
+
+    def tearDown(self):
+        self.srv.close()
+        self.tmp.cleanup()
+
+    def go(self, **kw):
+        return build.build(self.bp, "qwen3:8b", 2, 1.0, say=self.log.append, local=self.srv.url, **kw)
+
+    def test_only_this_machine(self):  # TM-29
+        for ok in ("http://localhost:11434/v1", "http://127.0.0.1:1234/v1/", "http://[::1]:8080", "https://localhost/v1"):
+            self.assertTrue(build.local_url(ok).startswith(("http://", "https://")), ok)
+        self.assertEqual(build.local_url("http://LOCALHOST:11434/v1/"), "http://localhost:11434/v1")
+        for bad in ("http://example.com/v1", "http://user:pw@localhost:1/v1", "http://localhost.evil.com/v1",
+                    "http://10.0.0.1/v1", "ftp://localhost/v1", "http://localhost:abc/v1", "http://localhost:1/v1?x=1",
+                    "http://127.0.0.2/v1", "localhost:11434", "http://[::ffff:8.8.8.8]/v1", "http://localhost:1/v1#x",
+                    "http://127.0.0.1.nip.io/v1", "http://2130706433/v1", "http://[::ffff:127.0.0.1]/v1"):
+            with self.assertRaises(build.BuildError, msg=bad):
+                build.local_url(bad)
+        with mock.patch.object(build.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 80))]):
+            with self.assertRaises(build.BuildError) as ctx:  # localhost bị sửa trong /etc/hosts
+                build.local_url("http://localhost:11434/v1")
+        self.assertIn("/etc/hosts", str(ctx.exception))
+        with self.assertRaises(build.BuildError):
+            build.local_post("http://example.com/v1/chat/completions", {}, "")
+
+    def test_build_stays_local_without_key_or_proxy(self):  # TM-29
+        env = {"HTTP_PROXY": "http://127.0.0.1:9", "http_proxy": "http://127.0.0.1:9", "NO_PROXY": "", "no_proxy": ""}
+        with mock.patch.object(build, "load_key", side_effect=AssertionError("không được đọc khoá")), \
+                mock.patch.object(build, "model_info", side_effect=AssertionError("không được hỏi OpenRouter")), \
+                mock.patch.dict(os.environ, env):  # proxy ở cổng chết: đi qua nó thì không gọi được
+            res, path = self.go(workers=1)
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual(path, self.d / "toy.graph.json")
+        self.assertGreaterEqual(len(self.srv.seen), 3)
+        for headers, body in self.srv.seen:
+            self.assertNotIn("authorization", {k.lower() for k in headers})
+            self.assertEqual(body["model"], "qwen3:8b")
+            self.assertNotIn("provider", body)
+            self.assertEqual(body["max_tokens"], build.LOCAL_OUT_TOKENS)
+        self.assertEqual(res.cost, 0)
+
+    def test_paper_goes_in_the_system_message(self):  # TM-32: Ollama bỏ tin nhắn cũ nhất trừ system khi quá ngữ cảnh
+        res, _ = self.go()
+        self.assertTrue(res.ok, res.report)
+        for _, body in self.srv.seen:
+            self.assertEqual(body["messages"][0]["role"], "system")
+            self.assertIn("[p1-b2 · abstract]", body["messages"][0]["content"])
+            self.assertFalse(any("[p1-b2 · abstract]" in str(m["content"]) for m in body["messages"][1:]))
+
+    def test_call_that_cannot_fit_is_refused_before_sending(self):  # TM-32
+        self.srv.ctx = 11_000  # lượt khung vừa (~10.360 token, 94%); lượt sau cộng chỗ cho câu trả lời thì không
+        res, _ = self.go()
+        self.assertTrue(any("cần khoảng" in x and "ngữ cảnh máy chủ 11000" in x for x in res.log), res.log)
+        self.assertEqual(len(self.srv.seen), 1)  # chỉ lượt khung được gửi
+
+    def test_odd_server_replies_do_not_crash_the_context_probe(self):
+        for odd in ({"models": 5}, {"models": [5, None]}, [], "x", {"models": [{"name": "qwen3:8b",
+                                                                              "context_length": "4096"}]}):
+            self.assertIsNone(build.local_context(self.srv.url, "qwen3:8b", get=lambda url, o=odd: o))
+
+    def test_truncated_context_stops_with_advice(self):  # TM-32
+        self.srv.prompt_tokens = 100  # bài vài nghìn ký tự mà máy chủ chỉ đọc 100 token
+        with self.assertRaises(build.BuildError) as ctx:
+            self.go()
+        self.assertIn("OLLAMA_CONTEXT_LENGTH", str(ctx.exception))
+        self.assertFalse((self.d / "toy.graph.json").exists())
+
+    def test_redirect_is_not_followed(self):  # TM-29
+        self.srv.redirect = True
+        with self.assertRaises(build.BuildError) as ctx:
+            self.go()
+        self.assertIn("302", str(ctx.exception))
+        self.assertEqual(len(self.srv.seen), 1)
+
+    def test_server_without_json_object_gets_a_plain_request(self):
+        self.srv.reject_format = True
+        res, _ = self.go()
+        self.assertTrue(res.ok, res.report)
+        self.assertIn("response_format", self.srv.seen[0][1])
+        self.assertFalse(any("response_format" in body for _, body in self.srv.seen[1:]))  # nhớ cho cả lần chạy
+        self.assertEqual(len(self.srv.seen), res.rounds + 1)
+        self.assertEqual(sum("không nhận response_format" in x for x in self.log), 1)
+
+    def test_context_reported_by_the_server_catches_a_partial_cut(self):  # TM-32
+        self.srv.ctx = 9000
+        self.srv.tokens = lambda sent: min(sent // 4, 9000)  # bài ~41 nghìn ký tự ≈ 10 nghìn token: mất ~12%
+        with self.assertRaises(build.BuildError) as ctx:
+            self.go()
+        self.assertIn("ngữ cảnh 9000", str(ctx.exception))
+        self.srv.ctx, self.srv.tokens = 65536, None  # ngữ cảnh đủ: chạy bình thường, log nêu số token đã đọc
+        res, _ = self.go()
+        self.assertTrue(res.ok, res.report)
+        self.assertTrue(any("ngữ cảnh 65536" in x for x in self.log))
+
+    def test_token_count_standing_still_means_a_cut(self):  # TM-32, máy chủ không báo ngữ cảnh
+        self.srv.tokens = lambda sent: 10_000  # chữ gửi đi tăng mà số token đứng yên
+        res, _ = self.go()
+        # Lượt mở nhánh ở bài đồ chơi chỉ dài hơn lượt khung 0,7% (dưới ngưỡng 2%); lượt đối chiếu dài hơn 4% thì bị bắt
+        stop = next(x for x in res.log if "đứng yên" in x)
+        self.assertRegex(stop, r"\(4\d{4} → 43\d{3} ký tự\)")  # so với lượt gửi nhiều chữ nhất trước đó
+        self.assertFalse(any(x.startswith("đối chiếu 1/1: thêm") for x in res.log), res.log)
+
+    def test_oversized_reply_is_refused(self):  # TM-31
+        with mock.patch.object(build, "MAX_REPLY_BYTES", 50), self.assertRaises(build.BuildError) as ctx:
+            self.go()
+        self.assertIn("quá lớn", str(ctx.exception))
+
+    def test_local_refuses_cloud_only_options(self):
+        with self.assertRaises(build.BuildError):
+            self.go(fallbacks=["a:free"])
+        with self.assertRaises(build.BuildError):
+            self.go(allow_training=True)
+
+    def test_cli_picks_the_only_model_and_runs_one_at_a_time(self):
+        from paper_graph import cli
+        seen = {}
+
+        def fake_build(*a, **kw):
+            seen.update(kw, model=a[1])
+            return build.Result(graph=None), self.d / "x"
+        out = io.StringIO()
+        with mock.patch.object(build, "build", fake_build), contextlib.redirect_stdout(out):
+            cli.main(["build", str(self.bp), "--local", self.srv.url])
+        self.assertEqual((seen["model"], seen["workers"], seen["local"]), ("qwen3:8b", 1, self.srv.url))
+        self.assertIn("không rời máy", out.getvalue())
+        self.srv.models = ["a", "b"]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertNotEqual(cli.main(["build", str(self.bp), "--local", self.srv.url]), 0)
+            self.assertNotEqual(cli.main(["build", str(self.bp), "--local", self.srv.url, "--model", "a",
+                                          "--allow-training"]), 0)
+            self.assertNotEqual(cli.main(["build", str(self.bp), "--local", "http://example.com/v1"]), 0)
+            self.assertNotEqual(cli.main(["build", str(self.bp), "--local", self.srv.url, "--model", "a",
+                                          "--workers", "0"]), 0)
+        self.assertIn("máy chủ có: a, b", err.getvalue())
+
+
+class Rename(unittest.TestCase):
+    def test_rename_only_clashes_and_follows_references(self):
+        part = {"nodes": [{"id": "a"}, {"id": "b"}], "groups": [{"id": "g", "members": ["a", "b"]}],
+                "edges": [{"from": "a", "to": "b"}, {"from": "s", "to": "a"}], "expand": ["a"]}
+        out, new = build._rename(part, {"a", "a-2", "g", "s"})
+        self.assertEqual(new, {"a": "a-3", "g": "g-2"})
+        self.assertEqual([n["id"] for n in out["nodes"]], ["a-3", "b"])
+        self.assertEqual(out["groups"][0], {"id": "g-2", "members": ["a-3", "b"]})
+        self.assertEqual(out["edges"], [{"from": "a-3", "to": "b"}, {"from": "s", "to": "a-3"}])
+        self.assertEqual(out["expand"], ["a-3"])
+        self.assertIs(build._rename(part, {"z"})[0], part)
+        long = "x" * 64
+        self.assertTrue(build.m.ID.fullmatch(build._rename({"nodes": [{"id": long}], "edges": [], "groups": []},
+                                                           {long})[1][long]))
 
 
 class Audit(unittest.TestCase):  # lượt đối chiếu chỗ bài tự lệch của chế độ theo tầng

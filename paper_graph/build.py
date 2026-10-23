@@ -10,12 +10,19 @@ Vòng: gửi chỉ dẫn (lấy từ skill dung-so-do, để hai cách dựng th
 - TM-25: `provider.data_collection: deny`; in model, số ký tự gửi đi và ước tiền trước khi gọi.
 """
 import json
+import ipaddress
 import os
+import queue
 import re
+import socket
 import stat
+import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -40,6 +47,11 @@ REASONING_TOKENS = 8_000
 CHARS_PER_TOKEN = 1.5
 MAX_REPLY_BYTES = 8 * 1024 * 1024
 RETRIES = 2
+LOCAL_TIMEOUT = 1800  # giây mỗi lượt của model trên máy: chậm hơn nhiều so với OpenRouter, nhưng vẫn có trần (TM-31)
+LOCAL_OUT_TOKENS = 16_000  # mỗi câu trả lời theo tầng ngắn; ngữ cảnh của máy chủ model trên máy chung cho vào và ra
+LOCAL_REPLY_ROOM = 8_000  # token chừa cho câu trả lời khi kiểm một lượt có vừa ngữ cảnh không (một tầng thường 2–6 nghìn)
+TRUNCATED_CHARS_PER_TOKEN = 5  # nhiều ký tự mỗi token hơn mức này: máy chủ đã cắt chữ gửi đi (TM-32)
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 # Model :free hay trả 504 (nhà cung cấp hết giờ chờ, đo 2026-10-20/21: Prism hỏng hai lần ở lượt khung): thử lại nhiều
 # hơn, chờ lâu hơn. Không tốn tiền; vẫn tính vào --max-calls (TM-27).
 RETRIES_FREE = 4
@@ -103,6 +115,107 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
+def _local_opener() -> urllib.request.OpenerDirector:
+    """Model trên máy: không qua proxy nào (biến môi trường hay cài đặt của hệ điều hành), không theo redirect (TM-29).
+    Dựng mỗi lần gọi: urllib đọc proxy lúc dựng opener."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
+def local_url(url: str) -> str:
+    """URL gốc của máy chủ model trên máy (vd. http://localhost:11434/v1), đã kiểm: chữ bài riêng tư không được rời máy
+    (TM-29). Chỉ http(s), host `localhost` (phải phân giải toàn địa chỉ loopback), `127.0.0.1` hay `[::1]`, không user:pass,
+    query hay fragment."""
+    try:
+        u = urllib.parse.urlsplit(url.strip())
+        port = u.port
+    except ValueError:
+        raise BuildError(f"--local: URL không đọc được: {url[:200]!r}") from None
+    host = (u.hostname or "").lower()
+    if u.scheme not in ("http", "https") or host not in LOCAL_HOSTS or u.username or u.password or u.query \
+            or u.fragment:
+        raise BuildError("--local chỉ nhận máy chủ model trên chính máy này: http://localhost:<cổng>/…, "
+                         f"http://127.0.0.1:<cổng>/… hay http://[::1]:<cổng>/… (nhận được {url[:200]!r})")
+    if host == "localhost":
+        try:
+            addrs = {a[4][0] for a in socket.getaddrinfo("localhost", port or 80, proto=socket.IPPROTO_TCP)}
+        except OSError:
+            raise BuildError("--local: không phân giải được localhost") from None
+        if not addrs or not all(ipaddress.ip_address(a.split("%")[0]).is_loopback for a in addrs):
+            raise BuildError("--local: localhost không trỏ về máy này (xem /etc/hosts); dùng http://127.0.0.1:<cổng>")
+    netloc = (f"[{host}]" if ":" in host else host) + (f":{port}" if port else "")
+    return urllib.parse.urlunsplit((u.scheme, netloc, u.path.rstrip("/"), "", ""))
+
+
+def local_post(url: str, body: dict, key: str) -> dict:
+    """POST JSON tới máy chủ model trên máy: kiểm lại host, không proxy, không redirect, không gửi khoá nào (TM-29); hết
+    giờ và trần kích thước phản hồi (TM-31)."""
+    local_url(url)
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with _local_opener().open(req, timeout=LOCAL_TIMEOUT) as r:
+            data = r.read(MAX_REPLY_BYTES + 1)
+    except urllib.error.HTTPError as e:
+        detail = e.read(2000).decode("utf-8", "replace") if e.fp else ""
+        raise BuildError(f"máy chủ model trả {e.code}: {detail}") from None
+    except (TimeoutError, OSError) as e:
+        kind = "hết giờ chờ" if isinstance(e, TimeoutError) or "timed out" in str(e) else "không gọi được"
+        raise BuildError(f"{kind} máy chủ model ở {url[:200]}: {e} (Ollama: chạy `ollama serve`; LM Studio: bật "
+                         "Local Server)") from None
+    except Exception as e:  # noqa: BLE001
+        raise BuildError(f"lỗi gọi máy chủ model: {type(e).__name__}: {e}") from None
+    if len(data) > MAX_REPLY_BYTES:
+        raise BuildError("phản hồi của máy chủ model quá lớn")
+    try:
+        return json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise BuildError("phản hồi của máy chủ model không phải JSON") from None
+
+
+def _local_get(url: str) -> dict:
+    local_url(url)
+    try:
+        with _local_opener().open(url, timeout=10) as r:
+            return json.loads(r.read(1024 * 1024).decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        raise BuildError(f"không đọc được {url}: {type(e).__name__}") from None
+
+
+def local_context(base: str, model: str, get: Callable[[str], dict] | None = None) -> int | None:
+    """Độ dài ngữ cảnh máy chủ trên máy đang dùng cho model, nếu nó cho biết: Ollama `GET /api/ps` (`context_length` của
+    model đã nạp), LM Studio `GET /api/v0/models/<model>` (`loaded_context_length`). None khi không biết (TM-32)."""
+    get = get or _local_get
+    u = urllib.parse.urlsplit(local_url(base))
+    root = urllib.parse.urlunsplit((u.scheme, u.netloc, "", "", ""))
+
+    def num(v):
+        return v if isinstance(v, int) and not isinstance(v, bool) and v > 0 else None
+    try:
+        d = get(root + "/api/ps")
+        for m in d.get("models") if isinstance(d, dict) and isinstance(d.get("models"), list) else []:
+            if isinstance(m, dict) and model in (m.get("name"), m.get("model"), str(m.get("name", "")).removesuffix(":latest")):
+                if num(m.get("context_length")):
+                    return m["context_length"]
+    except BuildError:
+        pass
+    try:
+        d = get(root + "/api/v0/models/" + urllib.parse.quote(model, safe=""))
+        return num(d.get("loaded_context_length")) if isinstance(d, dict) else None
+    except BuildError:
+        return None
+
+
+def local_models(base: str, get: Callable[[str], dict] | None = None) -> list[str]:
+    """Tên các model máy chủ trên máy đang có (`GET <base>/models`), để chọn khi không có `--model`."""
+    url = local_url(base) + "/models"
+    try:
+        data = (get or _local_get)(url)
+    except BuildError:
+        raise BuildError(f"không lấy được danh sách model ở {url} (máy chủ đã chạy chưa?)") from None
+    items = data.get("data") if isinstance(data, dict) else None
+    return [m["id"] for m in items or [] if isinstance(m, dict) and isinstance(m.get("id"), str)][:50]
+
+
 def http_post(url: str, body: dict, key: str) -> dict:
     """POST JSON tới OpenRouter (HTTPS, kiểm chứng chỉ mặc định, không theo redirect). Mọi lỗi thành BuildError đã
     che khoá, kể cả lỗi của http.client có thể in giá trị header."""
@@ -138,8 +251,9 @@ def _daily_quota(e: BuildError) -> bool:
 def _retryable(e: BuildError) -> bool:
     """Thử lại khi chắc chưa bị tính tiền hay server báo bận: 429, 502, 503, không kết nối được. Hết giờ chờ thì có thể
     model đã sinh xong và đã tính tiền: vòng gọi cộng tiền ước rồi mới thử lại (TM-22). Hết hạn mức ngày thì không."""
-    return not _daily_quota(e) and bool(re.match(r"OpenRouter trả (429|502|503|504)|không gọi được|hết giờ chờ|phản hồi của OpenRouter không "
-                         r"phải JSON", str(e)))  # trang lỗi HTML của cổng: tạm thời
+    return not _daily_quota(e) and bool(re.match(r"(?:OpenRouter|máy chủ model) trả (429|502|503|504)|không gọi được|hết giờ "
+                                                 r"chờ|phản hồi của (?:OpenRouter|máy chủ model) không phải JSON",
+                                                 str(e)))  # trang lỗi HTML của cổng: tạm thời
 
 
 # ---------------------------------------------------------------------------------------------------- chỉ dẫn
@@ -371,13 +485,17 @@ class _Stop(Exception):
 
 
 class _Caller:
-    """Các lượt gọi OpenRouter của một lần chạy: ước tiền trước mỗi lượt, thử lại có giới hạn, cộng tiền thật, giữ trần
-    tiền (TM-22) và trần số lượt gọi, kể cả lượt thử lại (TM-27)."""
+    """Các lượt gọi model của một lần chạy: ước tiền trước mỗi lượt, thử lại có giới hạn, cộng tiền thật, giữ trần
+    tiền (TM-22) và trần số lượt gọi, kể cả lượt thử lại (TM-27). Gọi được từ nhiều luồng (dựng song song)."""
 
     def __init__(self, model: str, key: str, post: Post, info: ModelInfo, max_usd: float, allow_training: bool,
                  say: Callable[[str], None], max_calls: int | None = None, fallbacks: list[str] | None = None,
-                 infos: dict[str, ModelInfo] | None = None):
+                 infos: dict[str, ModelInfo] | None = None, local: str | None = None,
+                 context: Callable[[str], int | None] | None = None):
         self.model, self.key, self.post, self.info = model, key, post, info
+        # Máy chủ model trên máy (`--local`): URL gốc đã kiểm, không khoá, không giá, không dự phòng (TM-29)
+        self.api, self.where = (local, "máy chủ model") if local else (API, "OpenRouter")
+        self.local = local is not None
         # Model :free dự phòng khi model đang dùng vẫn lỗi sau các lần thử lại. Chuyển rồi thì ở lại model đó tới hết lần
         # chạy (chủ ý): thử lại model chính ở mỗi lượt sẽ tốn 5 lượt và vài phút chờ mỗi lần khi nhà cung cấp còn sập.
         self.fallbacks = list(fallbacks or [])
@@ -385,74 +503,230 @@ class _Caller:
         self.max_usd, self.allow_training, self.say, self.max_calls = max_usd, allow_training, say, max_calls
         self.cost = 0.0
         self.calls = 0  # mọi lần gửi request, kể cả thử lại
+        self.replies = 0  # lượt nhận được câu trả lời
+        self.pending = 0.0  # mức ước của các lượt đang chờ trả lời (dựng song song), giữ chỗ trong trần tiền
+        self._cv = threading.Condition()  # khoá mọi trường ở trên; báo khi một lượt trả lại chỗ đã giữ
+        self.cancel = threading.Event()  # Ctrl+C hay lỗi lạ ở luồng chính: lượt chưa gửi thì thôi, không gửi thêm
         self.cpt = CHARS_PER_TOKEN  # ký tự mỗi token để ước; hiệu chỉnh theo token thật sau mỗi lượt
         self.head_chars: int | None = None
         # Model suy luận: thêm ngân sách suy luận; không vượt mức tối đa model cho (vượt thì nhà cung cấp có thể từ chối).
         out = MAX_OUT_TOKENS + (REASONING_TOKENS if info.reasoning else 0)
         self.out_tokens = min(out, info.max_out) if info.max_out is not None else out
+        if self.local:
+            self.out_tokens = LOCAL_OUT_TOKENS
+        self.json_mode = True  # LM Studio từ chối `response_format: json_object`: tắt một lần cho cả lần chạy
+        self.warned_usage = False
+        self.peak = (0, 0)  # (ký tự, token) của lượt gửi nhiều chữ nhất: token đứng yên khi chữ tăng là bị cắt (TM-32)
+        self.context = context if context is not None else (lambda m: local_context(local, m)) if local else None
+        self.ctx: int | None | bool = False  # độ dài ngữ cảnh máy chủ báo; False là chưa hỏi
+        self.local_cpt: float | None = None  # ký tự mỗi token đo ở lượt local sạch đầu tiên
 
     def ask(self, messages: list[dict], label: str) -> tuple[str, str, int | None]:
         """(nội dung, finish_reason, token suy luận) của một lượt. `_Stop` khi trần sắp bị vượt; BuildError (đã che
-        khoá) khi API vẫn lỗi sau các lần thử lại."""
+        khoá) khi API vẫn lỗi sau các lần thử lại. Mức ước của lượt đang chờ được giữ chỗ trong trần tiền; lượt mới chỉ
+        vượt được trần vì chỗ đang giữ thì chờ các lượt kia xong rồi tính lại (tiền thật thường thấp hơn mức ước nhiều).
+        Bộ đếm lượt tăng dưới khoá nên không lượt nào vượt trần (TM-22, TM-27)."""
         sent = sum(len(m["content"]) if isinstance(m["content"], str) else len(m["content"][0]["text"])
                    for m in messages)
-        if self.head_chars is None:
-            self.head_chars = sent
-        # Tỉ lệ đo được là của chỉ dẫn + bài; phần thêm (JSON tiếng Việt của model, báo cáo lỗi) dày token hơn, nên
-        # ước bằng tỉ lệ thấp hơn trong hai mức.
-        extra = max(sent - self.head_chars, 0)
-        estimate = (((sent - extra) / self.cpt + extra / min(self.cpt, CHARS_PER_TOKEN)) * self.info.p_in
-                    + self.out_tokens * self.info.p_out)
-        if self.cost + estimate > self.max_usd:
-            raise _Stop(f"dừng trước {label}: ước {estimate:.3f} USD, đã tiêu {self.cost:.3f}, trần {self.max_usd}")
-        if self.max_calls is not None and self.calls >= self.max_calls:
-            raise _Stop(f"dừng trước {label}: đã gọi {self.calls} lượt, trần {self.max_calls}")
-        self.say(f"{label}: gửi {sent} ký tự tới {self.model} (ước tối đa {estimate:.3f} USD)")
-        body = {"model": self.model, "messages": messages, "max_tokens": self.out_tokens, "temperature": 0.2,
-                "response_format": {"type": "json_object"}, "usage": {"include": True},
-                "provider": {"data_collection": "allow" if self.allow_training else "deny"}}
-        if self.info.reasoning:
+        while True:
+            with self._cv:
+                while True:
+                    if self.cancel.is_set():
+                        raise _Stop(f"dừng trước {label}: đã huỷ")
+                    if self.head_chars is None:
+                        self.head_chars = sent
+                    # Tỉ lệ đo được là của chỉ dẫn + bài; phần thêm (JSON tiếng Việt của model, báo cáo lỗi) dày token
+                    # hơn, nên ước bằng tỉ lệ thấp hơn trong hai mức.
+                    extra = max(sent - self.head_chars, 0)
+                    model, info, out_tokens = self.model, self.info, self.out_tokens
+                    estimate = (((sent - extra) / self.cpt + extra / min(self.cpt, CHARS_PER_TOKEN)) * info.p_in
+                                + out_tokens * info.p_out)
+                    if self.cost + estimate > self.max_usd:
+                        raise _Stop(f"dừng trước {label}: ước {estimate:.3f} USD, đã tiêu {self.cost:.3f}, "
+                                    f"trần {self.max_usd}")
+                    if self.max_calls is not None and self.calls >= self.max_calls:
+                        raise _Stop(f"dừng trước {label}: đã gọi {self.calls} lượt, trần {self.max_calls}")
+                    if self.local and self.ctx and self.local_cpt:
+                        # Phần thêm (JSON tiếng Việt, báo lỗi) dày token hơn chỉ dẫn + bài: ước 1,7 ký tự mỗi token
+                        need = (sent - extra) / self.local_cpt + extra / 1.7 + min(out_tokens, LOCAL_REPLY_ROOM)
+                        if need > self.ctx:
+                            raise BuildError(f"{label} cần khoảng {need:.0f} token (cả phần trả lời), ngữ cảnh máy chủ "
+                                             f"{self.ctx}: máy chủ sẽ cắt chữ. Tăng ngữ cảnh (Ollama: OLLAMA_CONTEXT_LENGTH"
+                                             "; LM Studio: Context Length) rồi chạy lại")
+                    if self.cost + self.pending + estimate <= self.max_usd:
+                        break
+                    self._cv.wait(1.0)  # các lượt đang chờ giữ phần còn lại của trần
+                self.pending += estimate
+            try:
+                out = self._send(messages, label, sent, model, info, out_tokens, estimate)
+            finally:
+                with self._cv:
+                    self.pending -= estimate
+                    self._cv.notify_all()
+            if out is not None:
+                return out
+            # None: đã chuyển sang model dự phòng (luồng này hay luồng khác chuyển), gửi lại bằng model đó
+
+    def _send(self, messages: list[dict], label: str, sent: int, model: str, info: ModelInfo, out_tokens: int,
+              estimate: float) -> tuple[str, str, int | None] | None:
+        """Một lượt với một model, kể cả thử lại. None khi đã chuyển sang model dự phòng."""
+        if self.local:
+            self.say(f"{label}: gửi {sent} ký tự tới {model} trên máy này")
+            body = {"model": model, "messages": messages, "max_tokens": out_tokens, "temperature": 0.2}
+        else:
+            self.say(f"{label}: gửi {sent} ký tự tới {model} (ước tối đa {estimate:.3f} USD)")
+            body = {"model": model, "messages": messages, "max_tokens": out_tokens, "temperature": 0.2,
+                    "usage": {"include": True},
+                    "provider": {"data_collection": "allow" if self.allow_training else "deny"}}
+        if self.json_mode:
+            body["response_format"] = {"type": "json_object"}
+        if info.reasoning:
             body["reasoning"] = {"max_tokens": REASONING_TOKENS}
         reply, failed = None, None
-        retries = RETRIES_FREE if self.model.endswith(":free") else RETRIES
+        retries = RETRIES_FREE if model.endswith(":free") else RETRIES
         for attempt in range(retries + 1):
-            if self.max_calls is not None and self.calls >= self.max_calls:
-                break  # lượt thử lại cũng tính vào trần (TM-27)
-            self.calls += 1
+            with self._cv:
+                if self.cancel.is_set() or (self.max_calls is not None and self.calls >= self.max_calls):
+                    break  # lượt thử lại cũng tính vào trần (TM-27)
+                self.calls += 1
             try:
-                reply = self.post(API + "/chat/completions", body, self.key)
+                reply = self.post(self.api + "/chat/completions", body, self.key)
                 err = reply.get("error") if isinstance(reply, dict) else None
                 if isinstance(err, dict):  # OpenRouter có khi trả 200 mà lỗi của nhà cung cấp nằm trong thân
                     reply = None
-                    raise BuildError(f"OpenRouter trả {err.get('code', '?')}: {str(err.get('message', ''))[:300]}")
+                    raise BuildError(f"{self.where} trả {err.get('code', '?')}: {str(err.get('message', ''))[:300]}")
                 break
             except BuildError as e:
                 failed = BuildError(redact(str(e), self.key))
-                if str(e).startswith("hết giờ chờ"):
-                    self.cost += estimate  # có thể đã bị tính tiền dù không nhận được trả lời
-                if (attempt == retries or not _retryable(e) or self.cost + estimate > self.max_usd
-                        or (self.max_calls is not None and self.calls >= self.max_calls)):
+                if self.local and "response_format" in body and "response_format" in str(e).lower():
+                    # LM Studio chỉ nhận `json_schema`: bỏ trường này cho cả lần chạy, `_json_of` vẫn tìm JSON trong chữ
+                    body.pop("response_format")
+                    with self._cv:
+                        first, self.json_mode = self.json_mode, False
+                    if first:
+                        self.say(f"{label}: máy chủ không nhận response_format json_object; gửi không có nó từ giờ")
+                    continue
+                with self._cv:
+                    if str(e).startswith("hết giờ chờ"):
+                        self.cost += estimate  # có thể đã bị tính tiền dù không nhận được trả lời
+                    give_up = (attempt == retries or not _retryable(e)
+                               or (self.max_calls is not None and self.calls >= self.max_calls))
+                    if not give_up:
+                        # Thử lại tốn thêm đúng một mức ước: trả chỗ của lượt này rồi xin lại như `ask`. Lượt đang chờ
+                        # không giữ chỗ nào, nên hai lượt cùng hết giờ không thể chờ nhau mãi.
+                        self.pending -= estimate
+                        self._cv.notify_all()
+                        while not (give_up := self.cancel.is_set() or self.cost + estimate > self.max_usd):
+                            if self.cost + self.pending + estimate <= self.max_usd:
+                                break
+                            self._cv.wait(1.0)
+                        self.pending += estimate  # `ask` trả lại đúng mức này khi lượt xong
+                if give_up:
                     break
                 time.sleep(2 ** attempt * (10 if retries == RETRIES_FREE else 3))
         if reply is None:
-            if (self.fallbacks and failed is not None and not _daily_quota(failed)
-                    and (self.max_calls is None or self.calls < self.max_calls)):
-                old, self.model = self.model, self.fallbacks.pop(0)
-                self.info = self.infos.get(self.model, self.info)
-                out = MAX_OUT_TOKENS + (REASONING_TOKENS if self.info.reasoning else 0)
-                self.out_tokens = min(out, self.info.max_out) if self.info.max_out is not None else out
-                self.say(f"{label}: {old} vẫn lỗi ({str(failed)[:120]}); chuyển sang model dự phòng {self.model}")
-                return self.ask(messages, label)
             if failed is not None and _daily_quota(failed):
                 raise BuildError("hết hạn mức ngày của model free trên OpenRouter (50 lượt khi tổng nạp dưới 9 USD, 1.000 khi "
                                  "từ 9 USD): chạy lại ngày mai") from None
-            raise failed or BuildError("không gọi được OpenRouter")
+            with self._cv:
+                room = (self.max_calls is None or self.calls < self.max_calls) and not self.cancel.is_set()
+                if failed is not None and room and self.model != model:
+                    return None  # luồng khác đã chuyển model trong lúc lượt này thử lại
+                if failed is not None and room and self.fallbacks:
+                    self.model = self.fallbacks.pop(0)
+                    self.info = self.infos.get(self.model, self.info)
+                    out = MAX_OUT_TOKENS + (REASONING_TOKENS if self.info.reasoning else 0)
+                    self.out_tokens = min(out, self.info.max_out) if self.info.max_out is not None else out
+                    switched = self.model
+                else:
+                    switched = None
+            if switched is not None:
+                self.say(f"{label}: {model} vẫn lỗi ({str(failed)[:120]}); chuyển sang model dự phòng {switched}")
+                return None
+            if self.cancel.is_set():
+                raise _Stop(f"dừng {label}: đã huỷ")
+            if failed is None:  # luồng khác vừa dùng lượt cuối của trần
+                raise _Stop(f"dừng trước {label}: đã gọi {self.calls} lượt, trần {self.max_calls}")
+            raise failed
         content, cost, finish = _parse_reply(reply)
-        self.cost += cost if cost is not None else estimate  # không có tiền thật thì tính mức ước trên
         prompt_tokens, reasoning_tokens = _usage(reply)
-        if prompt_tokens:  # không tin tỉ lệ cao hơn 4 ký tự mỗi token: ước thấp thì trần tiền vô hiệu
-            self.cpt = min(sent / prompt_tokens, 4.0) * 0.9
+        if self.local:
+            cost = 0.0
+            self._truncated(label, sent, prompt_tokens)
+        with self._cv:
+            self.cost += cost if cost is not None else estimate  # không có tiền thật thì tính mức ước trên
+            self.replies += 1
+            if prompt_tokens:  # không tin tỉ lệ cao hơn 4 ký tự mỗi token: ước thấp thì trần tiền vô hiệu
+                self.cpt = min(sent / prompt_tokens, 4.0) * 0.9
         return content, finish, reasoning_tokens
+
+    def _truncated(self, label: str, sent: int, tokens: int | None) -> None:
+        """Máy chủ trên máy lặng lẽ cắt chữ cho vừa ngữ cảnh (Ollama mặc định 4.096 token, cắt phần đầu): BuildError (TM-32).
+        Ba dấu hiệu: số token chạm độ dài ngữ cảnh máy chủ báo; số token gần như không đổi trong khi chữ gửi đi đổi; quá
+        `TRUNCATED_CHARS_PER_TOKEN` ký tự mỗi token (chỉ dẫn tiếng Việt và bài tiếng Anh thường 3–4). Lượt đầu sạch thì
+        ghi mật độ token đo được để `ask` từ chối trước khi gửi lượt chắc chắn không vừa ngữ cảnh."""
+        if not tokens:
+            if not self.warned_usage:
+                self.warned_usage = True
+                self.say(f"{label}: máy chủ không báo số token: không kiểm được chữ gửi đi có bị cắt không")
+            return
+        with self._cv:
+            peak, ask_ctx = self.peak, self.ctx is False
+            if sent > peak[0]:
+                self.peak = (sent, tokens)
+            if ask_ctx:
+                self.ctx = None
+        if ask_ctx and self.context is not None:
+            ctx = self.context(self.model)
+            with self._cv:
+                self.ctx = ctx
+            self.say(f"{label}: máy chủ đọc {tokens} token" + (f", ngữ cảnh {ctx} token" if ctx else ""))
+        ctx = self.ctx or None
+        why = None
+        if ctx and tokens >= ctx * 0.95:
+            why = f"đọc {tokens} token, sát ngữ cảnh {ctx} token của máy chủ"
+        elif peak[0] and abs(sent - peak[0]) > peak[0] * 0.02 and abs(tokens - peak[1]) <= max(8, peak[1] * 0.002):
+            # Bị cắt ở trần ngữ cảnh thì số token gần như đúng bằng nhau dù chữ gửi đi đổi; chữ khác mật độ thì không
+            why = f"số token đứng yên ({tokens}) trong khi chữ gửi đi đổi ({peak[0]} → {sent} ký tự)"
+        elif sent / tokens > TRUNCATED_CHARS_PER_TOKEN:
+            why = f"chỉ đọc {tokens} token trong {sent} ký tự đã gửi"
+        if not why:
+            with self._cv:
+                if self.local_cpt is None:
+                    self.local_cpt = sent / tokens
+            return
+        raise BuildError(f"máy chủ model đã cắt bớt chữ cho vừa ngữ cảnh ({why}): sơ đồ sẽ dựng từ một mảnh bài. Tăng "
+                         "ngữ cảnh rồi chạy lại (Ollama: OLLAMA_CONTEXT_LENGTH=65536 ollama serve; LM Studio: Context "
+                         "Length khi nạp model), hay chọn model có ngữ cảnh dài hơn")
+
+
+class _Pool:
+    """Luồng daemon cho các lượt chạy cùng lúc. ThreadPoolExecutor đợi mọi luồng của nó khi tiến trình thoát, nên Ctrl+C
+    phải chờ lượt đang gửi trả lời (một lượt của model trên máy tới 30 phút); luồng daemon thì không giữ tiến trình."""
+
+    def __init__(self, workers: int):
+        self.q: queue.SimpleQueue = queue.SimpleQueue()
+        self.threads = [threading.Thread(target=self._work, daemon=True) for _ in range(workers)]
+        for t in self.threads:
+            t.start()
+
+    def submit(self, fn: Callable, *args, **kw) -> Future:
+        f: Future = Future()
+        self.q.put((f, fn, args, kw))
+        return f
+
+    def _work(self) -> None:
+        while (item := self.q.get()) is not None:
+            f, fn, args, kw = item
+            if f.set_running_or_notify_cancel():
+                try:
+                    f.set_result(fn(*args, **kw))
+                except BaseException as e:  # noqa: BLE001 - trả về luồng chính qua future
+                    f.set_exception(e)
+
+    def close(self) -> None:
+        for _ in self.threads:
+            self.q.put(None)
 
 
 @dataclass
@@ -470,7 +744,11 @@ class _Job:
 
 def _prepare(blocks_path: Path, model: str, max_usd: float, key: str | None, post: Post | None, prices, base,
              say, allow_training: bool, tiers: bool, max_calls: int | None = None,
-             fallbacks: list[str] | None = None) -> _Job:
+             fallbacks: list[str] | None = None, local: str | None = None) -> _Job:
+    if local is not None:
+        local = local_url(local)
+        if fallbacks or allow_training:
+            raise BuildError("--local không dùng model dự phòng hay --allow-training (chữ bài không rời máy)")
     if fallbacks and not all(m.endswith(":free") for m in [model, *fallbacks]):
         raise BuildError("model dự phòng chỉ dùng cho model :free (không chuyển sang model trả phí)")
     if allow_training and not model.endswith(":free"):
@@ -480,34 +758,44 @@ def _prepare(blocks_path: Path, model: str, max_usd: float, key: str | None, pos
     if errs:
         raise BuildError(f"{blocks_path} hỏng:\n" + "\n".join(errs[:20]))
     title, text = paper_text(bl, doc, blocks_path.name)
-    key = key if key is not None else load_key()
-    info = prices if isinstance(prices, ModelInfo) else ModelInfo(*prices) if prices is not None else model_info(model)
+    if local is not None:  # không đọc khoá OpenRouter, không hỏi giá: khoá không bao giờ tới máy chủ này (TM-29)
+        key, info = "", ModelInfo(0.0, 0.0, None, False)
+    else:
+        key = key if key is not None else load_key()
+        info = prices if isinstance(prices, ModelInfo) else ModelInfo(*prices) if prices is not None else model_info(model)
     # Kiểm model dự phòng có thật ngay từ đầu (gõ sai thì báo luôn, không đợi model chính hỏng), lấy giới hạn riêng của nó
     infos = {m: (info if prices is not None else model_info(m)) for m in (fallbacks or [])}
     locked, _, _ = _locked(base)
     system = "\n\n".join(x for x in (instructions(tiers), _terms()) if x)
-    head = [{"role": "system", "content": system},
-            {"role": "user", "content": [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]}]
+    if local is not None:
+        # Ollama quá ngữ cảnh thì bỏ nguyên các tin nhắn cũ nhất nhưng giữ tin nhắn system và tin nhắn cuối: chữ bài ở tin
+        # nhắn riêng sẽ bị bỏ lặng lẽ (TM-32). Đặt nó trong tin nhắn system, vẫn có dòng đầu nói đây là dữ liệu (TM-28).
+        head = [{"role": "system", "content": system + "\n\n" + text}]
+    else:
+        head = [{"role": "system", "content": system},
+                {"role": "user", "content": [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]}]
     if locked:
         head.append({"role": "assistant", "content": "Đã đọc bài."})
         head.append({"role": "user", "content": "Đây là dựng lại. Các ô người dùng đã khoá dưới đây được chương trình "
                      "giữ nguyên (cả cạnh giữa chúng): giữ đúng id của chúng khi nối cạnh, không viết lại chúng.\n"
                      + "\n".join(json.dumps(n, ensure_ascii=False) for n in locked.values())})
-    caller = _Caller(model, key, post or http_post, info, max_usd, allow_training, say, max_calls, fallbacks, infos)
+    caller = _Caller(model, key, post or (local_post if local is not None else http_post), info, max_usd,
+                     allow_training, say, max_calls, fallbacks, infos, local)
     return _Job(bl, title, blocks_path.name, base, parse_graph(base)[0] if base is not None else None, locked, head,
                 caller)
 
 
 def run(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, key: str | None = None,
         post: Post | None = None, prices: tuple[float, float] | ModelInfo | None = None, base: dict | None = None,
-        say: Callable[[str], None] = print, allow_training: bool = False, fallbacks: list[str] | None = None) -> Result:
+        say: Callable[[str], None] = print, allow_training: bool = False, fallbacks: list[str] | None = None,
+        local: str | None = None) -> Result:
     """Dựng cả sơ đồ trong một câu trả lời (chế độ cũ, `--mode one-shot`). `rounds` là số lượt sửa sau lượt đầu. Không
     ghi file.
 
     Mỗi lượt sửa gửi: chỉ dẫn, bài, bản tốt nhất tới giờ và lỗi của nó (không gửi cả lịch sử: rẻ hơn, không vượt ngữ
     cảnh, và không sửa từ một bản tệ hơn). Lỗi API ở lượt sau lượt đầu thì dừng và giữ bản tốt nhất đã trả tiền."""
     job = _prepare(blocks_path, model, max_usd, key, post, prices, base, say, allow_training, tiers=False,
-                   fallbacks=fallbacks)
+                   fallbacks=fallbacks, local=local)
     bl, title, head, caller = job.bl, job.title, job.head, job.caller
     res = Result()
     best: tuple | None = None  # (lỗi, PG220, sơ đồ, báo cáo, câu trả lời, phản hồi)
@@ -570,6 +858,7 @@ REVIEW_CODES = ("PG305", "PG309")  # tuyên bố thiếu bằng chứng, bảng 
 MAX_CALLS = 32  # trần số lượt gọi mặc định của chế độ theo tầng (TM-27); cờ `--max-calls` tối đa 40. Đo 2026-10-21:
 # một bài cần 13–20 lượt để chạy đủ khung, mở 5–6 ô và lượt soát; đối chiếu từng câu tuyên bố thêm tới 6–12 lượt
 MAX_EXPAND_DEPTH = 2  # mở tới tầng thứ 3 (tầng đầu là 0): đúng độ sâu tối đa của bộ kiểm
+WORKERS = 4  # lượt mở nhánh, đối chiếu chạy cùng lúc (`--workers`); model free trên OpenRouter cho 20 lượt mỗi phút
 _FIELDS = ("id", "parent", "kind", "label", "term", "explain")
 
 
@@ -629,6 +918,32 @@ def _depth(merged: dict, nid: str) -> int:
         seen.add(cur)
         d, cur = d + 1, parent.get(cur)
     return d
+
+
+def _rename(part: dict, taken: set) -> tuple[dict, dict[str, str]]:
+    """Đổi id ô, nhóm của phần trùng với `taken` (hai nhánh dựng song song cùng đặt `c1`, vì mỗi nhánh chỉ thấy sơ đồ lúc
+    nó bắt đầu) thành `<id>-2`, `-3`…; sửa theo cạnh, thành viên nhóm, `expand`. Ô của một phần đều cùng ô cha có sẵn nên
+    không có `parent` nào phải đổi. (phần mới, {id cũ: id mới})."""
+    own = [n["id"] for n in part["nodes"]] + [g["id"] for g in part["groups"]]
+    used = set(taken) | set(own)
+    new: dict[str, str] = {}
+    for x in own:
+        if x in taken:
+            k = 2
+            while f"{x[:60]}-{k}" in used:
+                k += 1
+            new[x] = f"{x[:60]}-{k}"
+            used.add(new[x])
+    if not new:
+        return part, new
+
+    def r(v):
+        return new.get(v, v) if isinstance(v, str) else v
+
+    return {"nodes": [{**n, "id": r(n["id"])} for n in part["nodes"]],
+            "edges": [{**e, "from": r(e.get("from")), "to": r(e.get("to"))} for e in part["edges"]],
+            "groups": [{**g, "id": r(g["id"]), "members": [r(x) for x in g["members"]]} for g in part["groups"]],
+            "expand": [r(x) for x in part.get("expand", [])]}, new
 
 
 def _merge(merged: dict, part: dict | None) -> dict:
@@ -718,6 +1033,34 @@ def _checked(job: _Job, doc: dict):
 _ANCHOR_CODES = ("PG201", "PG202", "PG204", "PG205")  # neo không có thật hay không dùng được
 
 
+def _drop_pg220(part: dict, diags: list) -> list[str]:
+    """Bỏ khỏi một phần đúng các ô, cạnh, nhóm còn PG220 (số không có trong đoạn được neo, TM-7) và cạnh, thành viên nhóm,
+    `expand` trỏ tới ô đã bỏ: một ô còn số lạ sau các lượt sửa không kéo cả nhánh 9 ô đi theo (RAG 23/10: nhánh kết quả
+    0 lỗi, 1 PG220 sau 3 lượt sửa, bị bỏ cả nhánh). Trả nhãn những thứ đã bỏ."""
+    nodes, edges, groups = set(), set(), set()
+    for d in diags:
+        if d.code != "PG220":
+            continue
+        w = d.where.split(" · ")[0]
+        if w.startswith("ô "):
+            nodes.add(w[2:])
+        elif w.startswith("cạnh "):
+            edges.add(w[5:])
+        elif w.startswith("nhóm "):
+            groups.add(w[5:])
+    part["nodes"] = [n for n in part["nodes"] if n["id"] not in nodes]
+    part["edges"] = [e for e in part["edges"] if f"{e.get('from')}→{e.get('to')}" not in edges
+                     and e.get("from") not in nodes and e.get("to") not in nodes]
+    kept = []
+    for g in part["groups"]:
+        members = [x for x in g["members"] if x not in nodes]
+        if g["id"] not in groups and members:
+            kept.append({**g, "members": members})
+    part["groups"] = kept
+    part["expand"] = [x for x in part.get("expand", []) if x not in nodes]
+    return [f"ô {x}" for x in sorted(nodes)] + [f"cạnh {x}" for x in sorted(edges)] + [f"nhóm {x}" for x in sorted(groups)]
+
+
 def _drop_bad_anchors(part: dict, diags: list, given: int = 0) -> int:
     """Bỏ riêng những neo bộ kiểm báo hỏng (câu trích không có, quá ngắn, sai trang, sai đoạn) của các ô mới, nếu ô còn ít
     nhất một neo hợp lệ do model đưa: một câu chép sai không làm mất cả ô có ý đúng. `given`: số neo đầu danh sách do
@@ -764,7 +1107,7 @@ def _add(job: _Job, res: Result, merged: dict, intro: str, label: str, what: str
             res.log.append(f"{name}: {e}; giữ các phần đã nhận")  # phần nhận ở lượt trước không mất
             say(res.log[-1])
             break
-        res.rounds += 1
+        res.rounds = job.caller.replies
         res.cost = job.caller.cost
         raw = _json_of(content)
         adds = raw.get("additions") if isinstance(raw, dict) else None
@@ -815,14 +1158,19 @@ def _add(job: _Job, res: Result, merged: dict, intro: str, label: str, what: str
 def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0.5, key: str | None = None,
               post: Post | None = None, prices: tuple[float, float] | ModelInfo | None = None,
               base: dict | None = None, say: Callable[[str], None] = print, allow_training: bool = False,
-              max_calls: int = MAX_CALLS, fallbacks: list[str] | None = None) -> Result:
+              max_calls: int = MAX_CALLS, fallbacks: list[str] | None = None, workers: int = 1,
+              local: str | None = None) -> Result:
     """Dựng từng tầng một (chế độ mặc định): lượt khung xin tầng đầu, mỗi ô tầng đầu trừ ô vấn đề có một lượt xin tầng
     dưới của nó, ô con trong `expand` của lượt đó được mở tiếp (tới độ sâu 3), mỗi phần được kiểm và sửa riêng tối đa
     `rounds` lượt; cuối cùng lượt soát (PG305, PG309) và lượt đối chiếu chỗ bài tự lệch. Phần còn lỗi sau các lượt sửa thì bỏ
     (ghi log) để phần đã đạt không bị kéo theo; khung còn lỗi thì dừng. Mỗi câu trả lời chỉ chứa một tầng (tối đa 9
-    ô) nên ngắn, không bị cắt như khi xin cả sơ đồ. Không ghi file."""
+    ô) nên ngắn, không bị cắt như khi xin cả sơ đồ. Không ghi file.
+
+    `workers` > 1: các nhánh, và các câu tuyên bố của cùng một mục, chạy cùng lúc. Mỗi lượt thấy sơ đồ lúc nó bắt đầu;
+    chương trình gộp theo thứ tự gửi, đổi id trùng giữa hai nhánh và kiểm lại phần đã gộp (đo 2026-10-22: Dots 3 mất
+    ~30 phút một bài khi chạy tuần tự, mỗi lượt 1–2 phút)."""
     job = _prepare(blocks_path, model, max_usd, key, post, prices, base, say, allow_training, tiers=True,
-                   max_calls=max_calls, fallbacks=fallbacks)
+                   max_calls=max_calls, fallbacks=fallbacks, local=local)
     bl, title, caller = job.bl, job.title, job.caller
     l_nodes, l_edges, l_groups = _locked(base)
     merged = {"nodes": list(l_nodes.values()), "edges": list(l_edges), "groups": list(l_groups)}
@@ -837,12 +1185,13 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
 
     stopped: list[Exception] = []  # trần hay lỗi API giữa một phần: phần đó trả bản tốt nhất, rồi vòng ngoài dừng
 
-    def step(task: str, parent: str | None, label: str) -> tuple[dict | None, bool]:
-        """Một phần: hỏi, kiểm, sửa tới `rounds` lượt. (phần tốt nhất hay None, đạt chưa)."""
-        nonlocal merged
-        taken = {n["id"] for n in merged["nodes"]} | {g.get("id") for g in merged["groups"]}
-        siblings = frozenset(n["id"] for n in merged["nodes"] if n.get("parent") == parent)
-        intro = [{"role": "user", "content": _built(merged)}] if merged["nodes"] else []
+    def step(task: str, parent: str | None, label: str, doc: dict | None = None) -> tuple[dict | None, bool]:
+        """Một phần dựng trên sơ đồ `doc` (mặc định bản hiện tại): hỏi, kiểm, sửa tới `rounds` lượt. (phần tốt nhất hay
+        None, đạt chưa)."""
+        doc = merged if doc is None else doc
+        taken = {n["id"] for n in doc["nodes"]} | {g.get("id") for g in doc["groups"]}
+        siblings = frozenset(n["id"] for n in doc["nodes"] if n.get("parent") == parent)
+        intro = [{"role": "user", "content": _built(doc)}] if doc["nodes"] else []
         messages = job.head + intro + [{"role": "user", "content": task}]
         best = None  # (lỗi, PG220, phần, câu trả lời, phản hồi)
         for k in range(rounds + 1):
@@ -855,8 +1204,8 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
                 if best is None and res.rounds == 0:
                     raise
                 stopped.append(e)
-                return (best[2], False) if best is not None else (None, False)
-            res.rounds += 1
+                return salvage(best, doc, parent, label)
+            res.rounds = caller.replies
             res.cost = caller.cost
             raw = _json_of(content)
             if raw is None:
@@ -879,7 +1228,7 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
                                             "phải theo mẫu [A-Za-z0-9_.:-], không trùng id có sẵn). Trả lại phần được "
                                             "xin."}]
                 continue
-            _, rep = checked(_merge(merged, part))
+            _, rep = checked(_merge(doc, part))
             ids = {n["id"] for n in part["nodes"]}
             gids = {g["id"] for g in part["groups"]}
             mine = [d for d in rep.diags if _touches(d, ids, gids, parent)]
@@ -894,7 +1243,26 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
                 best = (n_err, n220, part, content, note)
             if best[0] == 0 and best[1] == 0:
                 return best[2], True
-        return (best[2], False) if best is not None else (None, False)
+        return salvage(best, doc, parent, label)
+
+    def salvage(best: tuple | None, doc: dict, parent: str | None, label: str) -> tuple[dict | None, bool]:
+        """Phần chưa đạt sau các lượt sửa: nếu chỉ còn PG220 (0 lỗi) thì bỏ đúng ô còn số lạ, phần còn lại sạch thì nhận."""
+        if best is None or best[0] or not best[1]:
+            return (best[2], False) if best is not None else (None, False)
+        part = {k: list(v) for k, v in best[2].items()}
+        _, rep = checked(_merge(doc, part))
+        ids = {n["id"] for n in part["nodes"]}
+        gone = _drop_pg220(part, [d for d in rep.diags if _touches(d, ids, {g["id"] for g in part["groups"]}, parent)])
+        if not part["nodes"]:
+            return best[2], False
+        _, rep = checked(_merge(doc, part))
+        ids = {n["id"] for n in part["nodes"]}
+        mine = [d for d in rep.diags if _touches(d, ids, {g["id"] for g in part["groups"]}, parent)]
+        if any(d.level == "error" or d.code == "PG220" for d in mine):
+            return best[2], False
+        res.log.append(f"{label}: bỏ {', '.join(gone)} (còn số không có trong đoạn được neo), giữ {len(ids)} ô")
+        say(res.log[-1])
+        return part, True
 
     def review(gaps: list, stats: dict) -> None:
         """Lượt soát: thêm ô cho chỗ thiếu mà bộ kiểm báo (tuyên bố thiếu bằng chứng, bảng không ô nào nói tới)."""
@@ -908,9 +1276,72 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
         claims = _claims(bl)
         if not claims:
             add(AUDIT_TASK, "đối chiếu", "")
-        for k, (page, block, sentence) in enumerate(claims, 1):
-            add(AUDIT_CLAIM.format(page=page, block=block), f"đối chiếu {k}/{len(claims)}", "",
-                {"page": page, "block": block, "quote": " ".join(sentence.split()[:15])}, _claim_data(sentence))
+        jobs = [(AUDIT_CLAIM.format(page=page, block=block), f"đối chiếu {k}/{len(claims)}", "",
+                 {"page": page, "block": block, "quote": " ".join(sentence.split()[:15])}, _claim_data(sentence),
+                 bl.blocks[block].label == "abstract") for k, (page, block, sentence) in enumerate(claims, 1)]
+        if workers <= 1:  # tuần tự: theo điểm của câu (câu có số trước), như trước khi có chạy song song
+            add_many([j[:5] for j in jobs])
+            return
+        # Câu của kết luận hay nhắc lại câu của tóm tắt: chạy tóm tắt trước để lượt kết luận thấy ô chỗ lệch đã thêm, không
+        # thêm trùng; các câu trong cùng một mục thì độc lập, chạy cùng lúc.
+        for wave in ([j[:5] for j in jobs if j[5]], [j[:5] for j in jobs if not j[5]]):
+            add_many(wave)
+
+    def add_many(jobs: list[tuple]) -> None:
+        """Các lượt thêm độc lập trên cùng một bản sơ đồ, `workers` lượt cùng lúc; gộp theo thứ tự gửi. Lượt nào chạm trần
+        thì các lượt khác vẫn được gộp rồi mới dừng."""
+        nonlocal merged
+        if workers <= 1 or len(jobs) <= 1:
+            for j in jobs:
+                add(*j)
+            return
+        snap = merged
+        pool = _Pool(min(workers, len(jobs)))
+        try:
+            futs = [pool.submit(_add, job, res, snap, intro, label, what, say, anchor=anchor, data=data)
+                    for intro, label, what, anchor, data in jobs]
+            wait(futs)
+        except BaseException:
+            caller.cancel.set()  # Ctrl+C: lượt chưa gửi thì thôi
+            raise
+        finally:
+            pool.close()
+        errs = []
+        for (_, label, *_), f in zip(jobs, futs):
+            try:
+                after = f.result()
+            except (_Stop, BuildError) as e:
+                errs.append(e)
+                continue
+            delta = {k: after[k][len(snap[k]):] for k in ("nodes", "edges", "groups")}
+            if delta["nodes"]:
+                gather({**delta, "expand": []}, snap, label)
+        if errs:
+            raise errs[0]
+
+    def gather(part: dict, snap: dict, label: str) -> dict | None:
+        """Gộp một phần dựng trên bản `snap` vào sơ đồ hiện tại: đổi id trùng với phần đã gộp từ lúc đó, kiểm lại nếu sơ đồ
+        đã đổi; còn lỗi thì bỏ. Trả phần đã gộp (id có thể đã đổi) hay None."""
+        nonlocal merged
+        if merged is not snap:
+            taken = {n["id"] for n in merged["nodes"]} | {g.get("id") for g in merged["groups"]}
+            part, renamed = _rename(part, taken)
+            if renamed:
+                res.log.append(f"{label}: đổi id trùng với phần dựng cùng lúc: "
+                               + ", ".join(f"{a} → {b}" for a, b in list(renamed.items())[:5]))
+                say(res.log[-1])
+            _, rep = checked(_merge(merged, part))
+            ids = {n["id"] for n in part["nodes"]}
+            gids = {g["id"] for g in part["groups"]}
+            parents = {n.get("parent") for n in part["nodes"]}
+            bad = [d for d in rep.diags
+                   if d.level == "error" and any(_touches(d, ids, gids, x) for x in parents)]
+            if bad:
+                res.log.append(f"{label}: bỏ, {len(bad)} lỗi khi gộp với phần dựng cùng lúc ({bad[0].code})")
+                say(res.log[-1])
+                return None
+        merged = _merge(merged, part)
+        return part
 
     def need(parent: str | None) -> str:
         """Dựng lại: ô cha của một ô khoá phải có lại đúng id ở đúng tầng, không thì ô khoá mồ côi (PG105, PG401)."""
@@ -944,21 +1375,52 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             if not queue:
                 res.log.append("tầng đầu không có ô nào ngoài ô vấn đề: sơ đồ chỉ có tầng đầu")
                 say(res.log[-1])
-        while queue:
-            target, depth = queue.pop(0)
-            task = (f"Dựng TẦNG DƯỚI của ô `{target}`: 2–9 ô con, cạnh giữa chúng, nhóm nếu cần"
+        # Mỗi nhánh dựng trên sơ đồ lúc nó bắt đầu; nhánh xong thì gộp ngay (theo thứ tự gửi trong cùng một lần chờ) và
+        # ô con trong `expand` của nó vào hàng đợi. `workers` = 1 là đúng cách cũ: rộng trước, từng nhánh một, ở luồng chính.
+        todo = deque(queue)
+
+        def task_for(target: str, depth: int) -> str:
+            return (f"Dựng TẦNG DƯỚI của ô `{target}`: 2–9 ô con, cạnh giữa chúng, nhóm nếu cần"
                     + (", và `expand`." if depth < MAX_EXPAND_DEPTH else "; `expand` để rỗng (đã đủ sâu).")
                     + " Không viết lại ô đã có; id mới không trùng id nào trong sơ đồ." + need(target))
-            part, ok = step(task, target, f"mở {target}")
+
+        def landed(target: str, depth: int, snap: dict, part: dict | None, ok: bool) -> None:
             if ok:
-                merged = _merge(merged, part)
-                if depth < MAX_EXPAND_DEPTH:
-                    queue += [(x, depth + 1) for x in part["expand"]][:9]
+                part = gather(part, snap, f"mở {target}")
+                if part is not None and depth < MAX_EXPAND_DEPTH:
+                    todo.extend([(x, depth + 1) for x in part["expand"]][:9])
             elif part is not None:
                 res.log.append(f"bỏ nhánh {target}: còn lỗi" + ("" if stopped else f" sau {rounds} lượt sửa"))
                 say(res.log[-1])
-            if stopped:
-                raise stopped[0]
+
+        if workers <= 1:
+            while todo and not stopped:
+                target, depth = todo.popleft()
+                snap = merged
+                part, ok = step(task_for(target, depth), target, f"mở {target}", snap)
+                landed(target, depth, snap, part, ok)
+        else:
+            pool, running, sent = _Pool(workers), {}, 0  # running: future → (thứ tự gửi, ô, độ sâu, sơ đồ lúc gửi)
+            try:
+                while todo or running:
+                    while todo and len(running) < workers and not stopped:
+                        target, depth = todo.popleft()
+                        running[pool.submit(step, task_for(target, depth), target, f"mở {target}", merged)] = (
+                            sent, target, depth, merged)
+                        sent += 1
+                    if not running:
+                        break
+                    done, _ = wait(running, return_when=FIRST_COMPLETED)
+                    for fut in sorted(done, key=lambda f: running[f][0]):
+                        _, target, depth, snap = running.pop(fut)
+                        landed(target, depth, snap, *fut.result())
+            except BaseException:
+                caller.cancel.set()  # Ctrl+C hay lỗi lạ: các lượt đang chờ không gửi thêm
+                raise
+            finally:
+                pool.close()
+        if stopped:
+            raise stopped[0]
         if top_ok:
             _, rep = checked(merged)
             gaps = [d for d in rep.diags if d.code in REVIEW_CODES]
@@ -974,7 +1436,7 @@ def run_tiers(blocks_path: Path, model: str, rounds: int = 3, max_usd: float = 0
             raise
         res.log.append(f"{e}; dừng, giữ các phần đã đạt")
         say(res.log[-1])
-    res.cost = caller.cost
+    res.cost, res.rounds = caller.cost, caller.replies
     if not any(n.get("status") != "locked" for n in merged["nodes"]):
         res.errors = 1
         return res

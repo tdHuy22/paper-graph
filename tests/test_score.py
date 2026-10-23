@@ -70,6 +70,43 @@ class Score(unittest.TestCase):
         self.assertTrue(it.matched)
         self.assertFalse(it.tier_ok)
 
+    def test_top_idea_split_into_two_cells_of_its_kind(self):
+        """Kết quả tách thành hai ô tầng đầu, câu tổng kết neo ở ô con của ô thứ nhất: hai ô tầng đầu đều đại diện ý."""
+        gold = {**GOLD, "items": [dict(i) for i in GOLD["items"]]}
+        gold["items"][3].update(kinds=["result", "claim"])
+        gold["items"].append({"id": "fig", "must": True, "tier": "under:result", "kinds": ["evidence"], "terms": [],
+                              "anchors": [{"page": 2, "quote": "Throughput of the flat widget compared"}]})
+        g = graph()
+        node(g, "result").update(id="res.a", anchors=[{"page": 2, "quote": "The flat widget reaches 28.4 BLEU"}],
+                                 label="Đạt 28.4 BLEU")
+        node(g, "r.claim")["parent"] = "res.a"
+        node(g, "r.fig")["parent"] = "res.b"  # ô kết quả thứ hai không khớp ý nào
+        g["nodes"].append({"id": "res.b", "parent": None, "kind": "result", "label": "Kết quả khác",
+                           "anchors": [{"page": 2, "quote": "It is impossible to train with a rate of 1e-5"}]})
+        g["edges"] = [{"from": "problem", "to": "idea", "kind": "flow"}, {"from": "idea", "to": "res.a", "kind": "flow"}]
+        b, _ = blocks_mod.parse(blocks())
+        gd = gold_mod.parse(gold)[0]
+        parsed, diags = parse_graph(g)
+        self.assertEqual([d for d in diags if d.level == "error"], [])
+        sc = score_mod.score(parsed, gd, b)
+        items = {i.id: i for i in sc.items}
+        self.assertEqual(items["result"].matched, ["r.claim"])
+        self.assertEqual([items[x].tier_ok for x in ("result", "speed", "fig")], [True, True, True])
+        self.assertIn(("speed", "result", True), sc.relations)
+        node(g, "r.claim")["parent"] = "idea"  # dưới ô tầng đầu khác loại: sai tầng, và không còn ô kết quả nào đại diện
+        items = {i.id: i for i in score_mod.score(parse_graph(g)[0], gd, b).items}
+        self.assertEqual([items[x].tier_ok for x in ("result", "fig")], [False, False])
+    def test_one_cell_is_not_a_relation_with_itself(self):
+        """Hai ý cùng chỉ khớp một ô: không có quan hệ nào thấy được, dù ô đó có cạnh (luật cũ: đi vòng qua ô khác)."""
+        gold = {**GOLD, "items": [dict(i) for i in GOLD["items"]] + [
+            {"id": "plan", "must": True, "tier": "any", "kinds": ["idea"], "terms": [],
+             "anchors": [{"page": 1, "quote": "processes all tokens at once"}]}],
+            "relations": [{"from": "idea", "to": "plan"}]}
+        b, _ = blocks_mod.parse(blocks())
+        sc = score_mod.score(parse_graph(graph())[0], gold_mod.parse(gold)[0], b)
+        self.assertEqual(next(i for i in sc.items if i.id == "plan").matched, ["idea"])
+        self.assertEqual(sc.relations, [("idea", "plan", False)])
+
 
 class Probes(unittest.TestCase):
     """Điểm soi: cạnh đúng loại và mức giữa hai phía; ô nêu đủ số và từ của chỗ bài tự lệch."""

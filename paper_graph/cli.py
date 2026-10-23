@@ -242,8 +242,10 @@ def cmd_serve(a) -> int:
 
 
 def cmd_build(a) -> int:
-    from .build import DEFAULT_FALLBACKS, DEFAULT_MODEL, build, raw_path  # noqa: PLC0415
+    from .build import DEFAULT_FALLBACKS, DEFAULT_MODEL, WORKERS, build, local_models, local_url, raw_path  # noqa: PLC0415
 
+    if a.local:
+        return _build_local(a, build, local_models, local_url, raw_path)
     a.model = a.model or DEFAULT_MODEL
 
     if not 0 <= a.rounds <= 6:
@@ -252,11 +254,15 @@ def cmd_build(a) -> int:
         raise InputError("--max-usd phải trong khoảng (0, 5]")
     if not 1 <= a.max_calls <= 40:
         raise InputError("--max-calls phải trong khoảng 1–40")
+    a.workers = WORKERS if a.workers is None else a.workers
+    if not 1 <= a.workers <= 8:
+        raise InputError("--workers phải trong khoảng 1–8")
     if a.model.endswith(":free") and not a.allow_training:
         raise InputError(f"{a.model} là model miễn phí: OpenRouter chỉ chạy khi cho nhà cung cấp huấn luyện trên chữ bài. "
                          "Bài đã công khai thì thêm --allow-training (và bật \"Free model training\" ở "
-                         "openrouter.ai/settings/privacy); bài riêng tư thì dựng bằng skill trong Claude Code")
-    extra = {"max_calls": a.max_calls} if a.mode == "tiers" else {}
+                         "openrouter.ai/settings/privacy); bài riêng tư thì dựng bằng skill trong Claude Code hay "
+                         "model trên máy (--local)")
+    extra = {"max_calls": a.max_calls, "workers": a.workers} if a.mode == "tiers" else {}
     fallbacks = [] if a.no_fallback else (a.fallback or (list(DEFAULT_FALLBACKS) if a.model == DEFAULT_MODEL else []))
     if fallbacks:
         extra["fallbacks"] = fallbacks
@@ -267,10 +273,43 @@ def cmd_build(a) -> int:
               "model miễn phí được lưu và dùng nó để huấn luyện. Chỉ dùng cho bài đã công khai.", flush=True)
     else:
         print(f"Chữ của bài sẽ gửi tới OpenRouter ({models}){also}, nhà cung cấp không lưu, không huấn luyện "
-              "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model local.", flush=True)
+              "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model trên máy (--local).", flush=True)
     res, path = build(Path(a.blocks), a.model, a.rounds, a.max_usd, force=a.force, allow_training=a.allow_training,
                       say=lambda m: print(safe(m, 500), flush=True), mode=a.mode, **extra)
     print(f"{res.rounds} lượt, {res.cost:.4f} USD")
+    return _build_done(a, res, path, raw_path)
+
+
+def _build_local(a, build, local_models, local_url, raw_path) -> int:
+    """`build --local URL`: model chạy trên máy (Ollama, LM Studio); chữ bài không rời máy, không cần khoá (TM-29..32)."""
+    base = local_url(a.local)
+    if a.allow_training or a.fallback:
+        raise InputError("--local không dùng --allow-training hay --fallback: chữ bài không rời máy")
+    if not 0 <= a.rounds <= 6:
+        raise InputError("--rounds phải trong khoảng 0–6")
+    if not 1 <= a.max_calls <= 40:
+        raise InputError("--max-calls phải trong khoảng 1–40")
+    # Một GPU xếp hàng các request: chạy song song chỉ làm lượt sau chờ tới hết giờ (TM-31)
+    a.workers = 1 if a.workers is None else a.workers
+    if not 1 <= a.workers <= 8:
+        raise InputError("--workers phải trong khoảng 1–8")
+    if not a.model:
+        names = local_models(base)
+        if len(names) != 1:
+            raise InputError("--local: chọn model bằng --model" + (f" (máy chủ có: {safe(', '.join(names), 300)})"
+                                                                  if names else " (máy chủ chưa có model nào)"))
+        a.model = names[0]
+    extra = {"max_calls": a.max_calls, "workers": a.workers} if a.mode == "tiers" else {}
+    print(f"Chữ của bài gửi tới {safe(a.model, 100)} trên máy này ({safe(base, 200)}), không rời máy. Model trên máy "
+          "cần ngữ cảnh dài (bài 30–60 nghìn token): Ollama đặt OLLAMA_CONTEXT_LENGTH, LM Studio chọn Context Length.",
+          flush=True)
+    res, path = build(Path(a.blocks), a.model, a.rounds, 1.0, force=a.force, local=base,
+                      say=lambda m: print(safe(m, 500), flush=True), mode=a.mode, **extra)
+    print(f"{res.rounds} lượt")
+    return _build_done(a, res, path, raw_path)
+
+
+def _build_done(a, res, path, raw_path) -> int:
     if res.graph is None:
         print("Không có sơ đồ nào đọc được"
               + (f"; câu trả lời của model ở {safe(str(raw_path(Path(a.blocks))), 300)}" if res.raw
@@ -385,6 +424,11 @@ def main(argv=None) -> int:
                    help="số lượt sửa theo lỗi của check, cho mỗi phần (tiers) hay cả sơ đồ (one-shot); mặc định 3")
     u.add_argument("--max-calls", type=int, default=32,
                    help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 32, tối đa 40)")
+    u.add_argument("--workers", type=int, default=None,
+                   help="số lượt mở nhánh, đối chiếu chạy cùng lúc ở chế độ theo tầng (mặc định 4, với --local là 1)")
+    u.add_argument("--local", metavar="URL",
+                   help="dựng bằng model chạy trên máy, API kiểu OpenAI (Ollama: http://localhost:11434/v1, LM Studio: "
+                        "http://localhost:1234/v1); chữ bài không rời máy, không cần khoá OpenRouter")
     u.add_argument("--max-usd", type=float, default=0.5, help="trần tiền cho cả lần chạy (mặc định 0,5 USD)")
     u.add_argument("--force", action="store_true", help="dựng lại khi đã có graph.json (ô khoá phải giữ nguyên)")
     u.add_argument("--allow-training", action="store_true",

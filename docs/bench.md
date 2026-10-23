@@ -43,7 +43,7 @@ hay `bench/pdf/` (hai bài mới, tải từ `source`) và không vào git; ch�
 | Trường | Nghĩa |
 | --- | --- |
 | `must` | ý bắt buộc; độ phủ chỉ tính trên các ý này |
-| `tier` | `top`: phải ở tầng đầu. `under:<id ý>`: phải nằm trong cây con của ô khớp với ý đó, ở tầng nào cũng được. `any`: tầng nào cũng được |
+| `tier` | `top`: phải ở tầng đầu. `under:<id ý>`: phải nằm trong cây con của ô đại diện ý đó, ở tầng nào cũng được. `any`: tầng nào cũng được. Ô đại diện của ý tầng đầu: ô khớp, cộng ô tầng đầu cùng loại ý có ô khớp trong cây con (luật từ 2026-10-23, xem mục cuối) |
 | `kinds` | loại ô chấp nhận được |
 | `terms` | thuật ngữ gốc; ô có nhãn, `term` hay `explain` chứa một trong số này cũng tính là khớp |
 | `anchors` | nơi bài nói ý này; được kiểm như neo của sơ đồ (test `GoldFiles`) |
@@ -342,3 +342,74 @@ lượt đối chiếu trên 3 sơ đồ Dots 3 ở trên (`.tmp/build/2026-10-2
   của TriviaQA (DPR 57,9 so với RAG 56,8) nên chưa tính. Lượt trước (code chưa sửa, Nemotron) không thêm được ô nào.
 - Kết luận: đối chiếu từng câu giúp ít; điểm soi của `build` bằng model free vẫn là chỗ yếu nhất (1 trên 9, so với 3 trên
   4 của skill trong Claude Code ở bài Merging).
+
+## Luật "đúng tầng" sửa: ô đại diện của ý tầng đầu (2026-10-23)
+
+Trước đây ý tầng đầu chỉ đúng tầng khi chính ô tầng đầu khớp ý (neo cùng đoạn với đáp án, hay chứa thuật ngữ của ý), và ý
+`under:X` phải nằm dưới một ô khớp ý X. Hai kiểu sơ đồ hợp lệ bị chấm sai tầng:
+
+- ý tầng đầu tách thành nhiều ô cùng loại: Merging có hai ô kết quả ("đa dạng", "so với temperature"), Prism có "tốc độ" và
+  "độ chính xác"; skill cho phép tách, đáp án chỉ có một ý `result`. Ý dưới ô thứ hai không nằm dưới ô nào khớp `result`;
+- ô tầng đầu đúng loại nhưng neo câu khác câu của đáp án, còn ô con của nó mới khớp: RoFormer của Haiku, ô `result` neo
+  ở §4 còn ô con `r.c_cons` chép câu tổng kết; RAG 6a (đã ghi ở trên).
+
+Luật mới: ô đại diện của ý tầng đầu gồm ô khớp, ô tầng đầu cùng loại ý (`kind` trong `kinds` của ý) có ô khớp trong cây
+con, và mọi ô tầng đầu khác cùng loại với ô đó; đúng tầng tính trên ô đại diện. Ô khớp dưới ô tầng đầu khác loại (tuyên
+bố kết quả dưới ô phương pháp) vẫn sai tầng (test `test_top_idea_split_into_two_cells_of_its_kind`). Quan hệ tính trên ô
+khớp và ô tầng đầu chứa chúng (không lấy mọi ô cùng loại, để hai ý cùng loại không chung ô đại diện), và giữa hai ô khác
+nhau. Luật cũ có lỗi ở chỗ này: một ô khớp cả hai đầu của quan hệ thì "nối với chính nó" qua hai bước bất kỳ (review
+23/10). Đáp án không đổi.
+
+Chấm lại 61 sơ đồ trong `.tmp/`, `bench/`, `papers/`: 19 sơ đồ đổi điểm, độ phủ không đổi ở sơ đồ nào. Sơ đồ có ý khớp mà
+sai tầng giảm từ 19 xuống 6; 6 sơ đồ còn lại sai thật (Prism 21/10 đặt ý `int2` của phương pháp dưới ô "vì sao chạy
+được"; BERT của Nemotron free lần 2 còn 3 ý), nên số đo vẫn phân biệt được.
+
+| Sơ đồ | Đúng tầng cũ → mới | Quan hệ cũ → mới |
+|---|---|---|
+| Merging, skill (iteration-9 và ba bản chép cho đo hiểu bài) | 69% → 100% | 86% → 100% |
+| Prism, skill (iteration-8 và hai bản chép) | 77% → 100% | 67% → 100% |
+| Prism, `build` one-shot 20/10 | 92% → 100% | 100% |
+| RAG, skill 6a | 93% → 100% | 100% |
+| RAG, `build` Nemotron (21/10 chốt, 22/10 đối chiếu) | 93% → 100% | 100% |
+| RoFormer, `build` Haiku | 43% → 71% (cả 4 ý còn thiếu là ý không có ô khớp) | 67% → 83% |
+| RoFormer, `build` Nemotron free (lần 2) | 79% → 93% | 50% → 83% |
+| Prism, `build` tiers (21/10 v2, đối chiếu, chốt; 22/10 đối chiếu) | không đổi | 100% → 83%: `observation` và `idea` chỉ khớp cùng một ô `idea` |
+| RAG, `build` tiers v2 21/10 (và lượt đối chiếu của nó) | không đổi | 80% → 60%: cùng kiểu, một ô khớp cả hai đầu |
+
+Các con số ở những mục trên giữ theo luật lúc đo. Tiêu chí so tiers với one-shot (lần đo chốt 21/10) chỉ xét độ phủ nên
+vẫn đạt. Riêng lần đo đó theo luật mới: RAG tiers đúng tầng 93% → 100% (one-shot giữ 86%); Prism one-shot đúng tầng 92% →
+100% còn tiers giữ 92% (ý `int2` ở trên), và quan hệ của Prism tiers 100% → 83% (one-shot giữ 100%), nên ở Prism one-shot
+giờ hơn tiers ở hai số đo phụ thay vì ngang.
+
+## Đo Dots 3 với code Mốc 7: song song, cứu nhánh (2026-10-23)
+
+Code: `build` mặc định (`--mode tiers`, `--workers 4`, Dots 3 kèm hai model free dự phòng), có bước bỏ đúng ô còn PG220
+thay vì bỏ cả nhánh. 5 bài có đáp án, mỗi bài 2 lần (`.tmp/build/2026-10-23-measure/run.sh 1|2`, hai lần chạy cùng lúc,
+từ bản chụp `snap/`; chỉ dẫn cùng mã băm với repo). Bản chụp có trước các sửa của review lượt 2; các sửa đó chỉ đổi đường
+`--local` và vòng thử lại khi có giá, không đổi đường model free. Chấm bằng bộ chấm ở mục trên (`score.py` của lần đo).
+Mỗi ô: phủ ý bắt buộc, đúng tầng, quan hệ, soi.
+
+| Bài | Lần 1 | Lần 2 | Mốc so sánh (luật chấm mới) |
+|---|---|---|---|
+| RAG | 13/14, 93%, 80%, 1/4 · 33 ô, 20 lượt, 16 phút | 14/14, 100%, 100%, 0/4 · 37 ô, 21 lượt, 34 phút | Dots 3 tuần tự 22/10: 14/14, 100%, 100%, 0/4 (35 phút) |
+| DataSentinel | 13/13, 100%, 100%, 1/2 · 51 ô, 18 lượt, 15 phút | 13/13, 100%, 80%, 1/2 · 37 ô, 16 lượt, 11 phút | 22/10: 13/13, 100%, 80%, 1/2 (33 phút) |
+| Prism | 13/13, 92%, 83%, 0/3 · 33 ô, 20 lượt, 25 phút | 13/13, 100%, 100%, 0/3 · 39 ô, 26 lượt, 27 phút | 22/10: 13/13, 100%, 100%, 0/3 (22 phút) |
+| Ignored | 14/14, 93%, 57%, 1/4 · 48 ô, 31 lượt, 23 phút | 13/14, 93%, 57%, 1/4 · 39 ô, 24 lượt, 17 phút | skill (Opus, iteration-8): 14/14, 100%, 57%, 2/4 |
+| Merging | 12/13, 92%, 86%, 2/4 · 35 ô, 23 lượt, 15 phút | 13/13, 100%, 86%, 2/4 · 30 ô, 24 lượt, 24 phút | skill (Opus, iteration-9): 13/13, 100%, 100%, 3/4 |
+
+- 10/10 lần chạy 0 lỗi, 0 PG220, ghi được `graph.json`; không lần nào lỗi API hay phải chuyển model dự phòng; 16–31 lượt
+  mỗi lần (trần 32: Ignored lần 1 sát trần).
+- Độ phủ 131/134 ý bắt buộc (98%), mọi lần từ 92% trở lên (ngưỡng 80%). Ba ý hụt: RAG lần 1 thiếu `human` và Merging lần 1
+  thiếu `metrics`, cả hai thuộc nhánh kết quả bị bỏ vì còn lỗi sau 3 lượt sửa; Ignored lần 2 không có ô khớp `judge_valid`.
+  Nhánh bị bỏ ở 3/10 lần đều là nhánh kết quả (RAG lần 1, Merging cả hai lần): nhánh nhiều số nhất, nên nhiều lỗi neo nhất.
+- Hai bài ra sau mốc dữ liệu của model (Ignored, Merging, arXiv 16/10/2026): phủ ngang skill dựng bằng Opus trong Claude
+  Code; quan hệ Ignored 57% cả ba (đáp án đòi những cặp mà cả skill cũng không nối); điểm soi kém skill một điểm mỗi bài.
+- Điểm soi: 9/34 (26%), so với 1/9 ở lần đo 22/10. Merging 2/4 cả hai lần; RAG, Prism vẫn 0. Đối chiếu từng câu là chỗ
+  yếu còn lại của model free.
+- Bước cứu nhánh được dùng 3 lần: Prism lần 1 (nhánh kết quả: bỏ 8 ô còn số không có trong đoạn được neo, giữ 1; trước đây
+  mất cả 9), Ignored cả hai lần. Không lần nào phải đổi id trùng giữa các nhánh chạy cùng lúc.
+- Thời gian: 11–34 phút, trung bình 21 phút mỗi bài, khi hai lần đo chạy cùng lúc (tới 8 lượt chờ cùng lúc ở nhà cung
+  cấp free); một mình RAG 4 luồng mất 19 phút. Tuần tự 22/10: 22–35 phút, trung bình 30. Nhanh hơn chừng 1,4–1,8 lần,
+  tuỳ tải của nhà cung cấp; chậm nhất vẫn là từng lượt của Dots 3 (1–3 phút).
+- Biến động giữa hai lần cùng bài: 0–1 ý phủ, 0–8 điểm tầng, 0–20 điểm quan hệ; đọc chênh lệch dưới mức này giữa hai cấu
+  hình là nhiễu.

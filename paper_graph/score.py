@@ -3,7 +3,12 @@
 Một ô **khớp** một ý khi loại ô nằm trong `kinds` của ý, và hoặc một neo của ô rơi vào cùng đoạn với một neo của ý,
 hoặc nhãn/thuật ngữ/giải thích của ô chứa một trong `terms` của ý. Từ đó:
     độ phủ      ý bắt buộc có ít nhất một ô khớp
-    đúng tầng   ý bắt buộc có ô khớp nằm đúng `tier` (top: tầng đầu; under:X: trong cây con của ô khớp ý X)
+    đúng tầng   ý bắt buộc có ô khớp nằm đúng `tier` (top: tầng đầu; under:X: trong cây con của ô đại diện ý X)
+    ô đại diện  của ý tầng đầu: ô khớp, ô tầng đầu cùng loại ý có ô khớp trong cây con, và mọi ô tầng đầu khác cùng loại
+                với ô đó. Ý vẫn ở tầng đầu khi câu neo của đáp án rơi vào ô con (ô tầng đầu neo câu khác), và ý tách
+                thành nhiều ô tầng đầu cùng loại (kết quả "tốc độ" và "độ chính xác") là một ý. Ô khớp nằm dưới ô tầng
+                đầu khác loại (tuyên bố kết quả dưới ô phương pháp) vẫn là sai tầng. Quan hệ tính trên ô khớp và ô tầng đầu chứa chúng (không lấy mọi ô cùng loại), giữa hai ô khác
+                nhau
     quan hệ     hai ô khớp hai đầu nối nhau trong cùng tầng, trực tiếp hay qua một ô ở giữa (vấn đề → ý → cách làm),
                 hay, khi `ancestor_ok`, ô này nằm trong cây con của ô kia
     soi         điểm soi (`probes`) đạt: cạnh đúng loại và mức giữa hai phía, hay một ô nêu đủ số và từ của chỗ bài
@@ -108,14 +113,31 @@ def score(graph: m.Graph, gold: Gold, blocks: Blocks) -> Score:
                 found[n.id] = "thuật ngữ"
         matches[it.id] = found
 
+    def top_of(nid: str) -> str:
+        seen, cur = {nid}, nid
+        while nodes[cur].parent in nodes and nodes[cur].parent not in seen:
+            cur = nodes[cur].parent
+            seen.add(cur)
+        return cur
+
+    owners: dict[str, set[str]] = {}  # ý → ô đại diện, cho đúng tầng
+    linked_owners: dict[str, set[str]] = {}  # ý → ô khớp và ô tầng đầu chứa chúng, cho quan hệ
+    for it in gold.items.values():
+        owners[it.id] = set(matches[it.id])
+        linked_owners[it.id] = set(matches[it.id])
+        if it.tier == "top":
+            tops = {t for t in map(top_of, matches[it.id]) if nodes[t].parent is None and nodes[t].kind in it.kinds}
+            kinds = {nodes[t].kind for t in tops}
+            owners[it.id] |= tops | {n.id for n in nodes.values() if n.parent is None and n.kind in kinds}
+            linked_owners[it.id] |= tops
+
     results = []
     for it in gold.items.values():
         found = matches[it.id]
         if it.tier == "top":
-            tier_ok = any(nodes[x].parent is None for x in found)
+            tier_ok = any(nodes[x].parent is None for x in owners[it.id])
         elif it.tier.startswith("under:"):
-            owners = set(matches.get(it.tier[6:], {}))
-            tier_ok = any(ancestors(x) & owners for x in found)
+            tier_ok = any(ancestors(x) & owners.get(it.tier[6:], set()) for x in found)
         else:
             tier_ok = bool(found)
         how = "đoạn" if "đoạn" in found.values() else ("thuật ngữ" if found else "")
@@ -132,8 +154,9 @@ def score(graph: m.Graph, gold: Gold, blocks: Blocks) -> Score:
 
     rels = []
     for r in gold.relations:
-        a, b = set(matches[r.src]), set(matches[r.dst])
-        ok = any(linked(x, y) for x in a for y in b)
+        # Hai ý cùng loại (ý tưởng, phương pháp) có thể chung một ô đại diện: một ô không tính là nối với chính nó
+        a, b = linked_owners[r.src], linked_owners[r.dst]
+        ok = any(x != y and linked(x, y) for x in a for y in b)
         if not ok and r.ancestor_ok:
             ok = any(y in ancestors(x) or x in ancestors(y) for x in a for y in b)
         rels.append((r.src, r.dst, ok))

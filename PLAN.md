@@ -4,7 +4,7 @@ Mô tả sản phẩm ở [README.md](README.md); file này chỉ ghi trạng th
 
 ## §0 Đang ở đâu, việc tiếp theo
 
-Cập nhật 2026-10-19.
+Cập nhật 2026-10-23.
 
 ### Đã xong, có bằng chứng
 
@@ -51,7 +51,7 @@ Cập nhật 2026-10-19.
 ```bash
 ../pdf-translator/.venv/bin/python bench/prepare.py                       # blocks của bộ đo (không có trong git)
 ../pdf-translator/.venv/bin/python -m unittest discover -s tests -t .     # mọi test, gồm bộ trích và bộ đo
-python3 -m paper_graph check bench/papers/attention/attention.graph.json --strict
+python3 -m paper_graph check bench/papers/attention/attention.graph.json        # 0 lỗi; 1 cảnh báo PG309 đã biết (Bảng 3)
 ```
 
 - **Mốc 1 đã commit** `668d8e2` (bạn bảo "commit đi", 2026-10-12).
@@ -398,6 +398,39 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     (biên nhận). Đối chiếu bằng code đã sửa trên sơ đồ Dots 3: RAG thêm 1 ô chỗ lệch đúng ("ba" so với "bốn" tập QA), điểm soi
     không đổi (1 trên 9); docs/bench.md mục cuối. Đã commit (bạn bảo "commit đi").
 
+21. **Xong: Mốc 7, nâng cấp toàn diện** (2026-10-23, bạn bảo "lên kế hoạch cải thiện và nâng cấp toàn diện rồi
+    làm đi"; xuất phát từ `4a6e44e`, 259 test đạt). Thứ tự: (1) `build` mở các nhánh song song, Dots 3 mất ~30 phút một
+    bài vì mở tuần tự; (2) bộ chấm "đúng tầng" nhận ý tầng đầu tách thành nhiều ô cùng loại (Prism, Merging bị chấm
+    thấp oan); (3) đo Dots 3 trên 5 bài có đáp án, mỗi bài 2 lần, chạy nền; (4) `build` gọi model chạy trên máy (Ollama,
+    LM Studio; chỉ localhost) cho bài riêng tư, threat model trước; (5) kiểm VietPaper, làm Mốc 4 nếu phiên kia đã
+    commit; (6) review, docs, hỏi commit. Soi bằng hai model free để sau cùng (tốn gấp đôi, chưa chắc có lợi).
+    Tiến độ: (1) xong: `--workers` (mặc định 4), `_Caller` khoá `_mu`, giữ chỗ tiền `pending`, đếm lượt dưới khoá,
+    một luồng chuyển dự phòng; `_rename`, `gather`, `add_many` (đối chiếu chạy theo đợt: tóm tắt rồi kết luận); test
+    `Parallel`, `Rename`; RAG chạy thật 4 luồng qua hết các nhánh trong 14 phút (tuần tự 22/10: 35 phút). (2) xong: ô đại
+    diện của ý tầng đầu (`score.py`); chấm lại 61 sơ đồ: 13 đổi, độ phủ không đổi, sơ đồ có ý sai tầng 19 → 6
+    (docs/bench.md mục cuối). (4) xong phần code: `--local URL` (TM-29..TM-32 trong threat model), test `Local` với máy
+    chủ HTTP thật trên 127.0.0.1, 7 đột biến chốt chặn đều làm đỏ; máy chưa có Ollama nên chưa thử model thật. (5) VietPaper
+    còn 2 file sửa chưa commit của phiên kia (`.agent/threat-model.md`, `scripts/smoke_features.py`) và `HANDOFF.md`:
+    không đụng. Mốc kiểm tra `check --strict` Attention trượt từ `2f3d14a` vì PG309 (Bảng 3, đã biết): bỏ `--strict`.
+    276 test đạt (biên nhận). Bản chạy thử RAG 4 luồng xong: 19 phút (tuần tự 35), 0 lỗi, phủ 12/14 vì nhánh `result` và
+    `limit` bị bỏ cả nhánh khi chỉ còn 1 PG220 (dao động của model, không do song song) → sửa: `_drop_pg220` + `salvage`
+    trong `run_tiers` bỏ đúng ô còn PG220 nếu phần còn lại sạch (test `test_only_the_cell_with_a_made_up_number_is_dropped`,
+    `test_branch_with_an_error_is_still_dropped_whole`; đột biến tắt làm đỏ; README ghi). Review opus lượt 1: 0 cao, 3 vừa,
+    3 thấp, sửa cả 6 (Ctrl+C không dừng → 1 luồng chạy ở luồng chính, nhiều luồng `_Pool` daemon + `_Caller.cancel`, SIGINT
+    thật dừng ở 2,5 giây; dừng oan vì tiền đang giữ chỗ → chờ trên `_cv`; LM Studio gửi lại `response_format` mỗi lượt →
+    `json_mode`; quan hệ của một ô với chính nó → `x != y`, chấm lại: 19/61 sơ đồ đổi, 6 sơ đồ build tụt quan hệ đúng
+    như vậy; 1 luồng đổi thứ tự đối chiếu; `--workers 0`), TM-32 thêm hỏi ngữ cảnh máy chủ và dấu hiệu token đứng yên
+    (ngưỡng 8 → 5); chi tiết ở threat model. 9 đột biến chốt chặn, 8 làm đỏ (1 còn lại có chốt dự phòng). Bộ test đầy
+    đủ đạt (biên nhận, 69,6 giây). Review opus lượt 2: 1 vừa (hai lượt trả phí cùng hết giờ thì chờ nhau mãi → lượt thử
+    lại trả chỗ rồi xin lại), 1 thấp (`/api/ps` lạ), 2 nghi ngờ (Ollama bỏ nguyên tin nhắn chữ bài khi quá ngữ cảnh → ở
+    `--local` chữ bài vào tin nhắn system, kiểm trước khi gửi; "token đứng yên" báo nhầm → chỉ khi gần như bằng hẳn); sửa
+    cả 4, test và đột biến đều đỏ khi bỏ chốt; bộ test đạt (biên nhận, 93,8 giây); tái hiện `--local` qua CLI đạt.
+    (3) xong: đo Dots 3, 5 bài × 2 lần (`.tmp/build/2026-10-23-measure/`, docs/bench.md mục cuối): 10/10 lần 0 lỗi, ghi
+    `graph.json`; phủ 131/134 (98%), soi 9/34 (lần 22/10: 1/9); Ignored, Merging phủ ngang skill Opus; 21 phút mỗi bài khi
+    hai lần đo chạy cùng lúc (tuần tự 30); cứu nhánh dùng 3 lần; nhánh kết quả bị bỏ 3/10 lần (chỗ yếu tiếp theo).
+    Chưa commit. Tiếp: hỏi commit Mốc 7. Treo: thử model thật với `--local` cần cài
+    Ollama (@ban); TM-30 chấp nhận rủi ro cổng loopback trên máy dùng chung (@ban); Mốc 4 VietPaper chờ repo kia sạch.
+
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
 - **Q1 B, đổi 2026-10-16.** Repo riêng gồm lõi (định dạng file, bộ kiểm, bước dựng) và trình xem. Ban đầu VietPaper
@@ -487,3 +520,13 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] `build` theo tầng đạt tiêu chí so với one-shot trên RAG, DataSentinel, Prism (v2 tự mở ô tầng đầu, lượt đối chiếu; lần đo chốt 21/10)
 - [x] ~~Chặn cứng lệnh mạng cho agent dựng sơ đồ (`permissions.deny`)~~: bỏ, bạn chốt 2026-10-21 không cần (chấp nhận rủi ro; `build` không có công cụ nên không liên quan)
 - [x] Bài mới thứ ba cho bộ đo skill: Prism và Ignored đã dùng để sửa skill ngày 20/10, đo skill mới cần bài chưa dùng (Merging, 21/10)
+
+### Mốc 7: nâng cấp toàn diện (từ 2026-10-23)
+
+- [x] `build` mở các nhánh song song (`--workers`; khoá bộ đếm lượt, giữ chỗ tiền; id trùng giữa hai nhánh thì đổi id). (23/10)
+- [x] Bộ chấm "đúng tầng" nhận ý tầng đầu tách thành nhiều ô cùng loại; quan hệ không tính một ô với chính nó. (23/10)
+- [x] Đo Dots 3 trên 5 bài có đáp án, mỗi bài 2 lần: phủ 98%, soi 9/34, 0 lỗi cả 10 lần. (23/10)
+- [x] `build --local` gọi model chạy trên máy (Ollama, LM Studio; chỉ localhost) cho bài riêng tư. (23/10; kiểm bằng máy chủ giả, chưa thử model thật)
+- [ ] Thử `--local` với Ollama thật trên một bài (cần cài Ollama và một model). @ban
+- [ ] Nhánh kết quả bị bỏ 3/10 lần vì còn lỗi neo sau 3 lượt sửa: xem lỗi nào lặp, sửa chỉ dẫn hay bước cứu.
+- [ ] Soi bằng hai model free (đối chiếu chéo), làm sau cùng nếu còn đáng.

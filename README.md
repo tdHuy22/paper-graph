@@ -43,6 +43,7 @@ python3 -m paper_graph read bai.blocks.json --find "N = 6 identical layers"     
 python3 -m paper_graph fmt bai.graph.json                                       # định dạng chung: mỗi ô một dòng
 python3 -m paper_graph quiz bai.quiz.json                                       # câu hỏi hiểu bài → trang làm bài
 python3 -m paper_graph build bai.blocks.json --allow-training                  # dựng sơ đồ bằng model miễn phí qua OpenRouter
+python3 -m paper_graph build bai.blocks.json --local http://localhost:11434/v1  # dựng bằng model trên máy (Ollama), bài riêng tư
 ```
 
 `view` ghi một file HTML tự chứa: tầng đầu, bấm ô để xem giải thích và câu trích nguyên văn (kèm ảnh đoạn gốc),
@@ -63,10 +64,11 @@ Dựng sơ đồ không cần Claude Code: `build` gửi chữ bài và chỉ d�
 OpenRouter, chạy `check`, gửi lỗi lại cho model sửa. Mặc định (`--mode tiers`) dựng từng tầng một: lượt đầu xin tầng
 đầu, mỗi ô tầng đầu trừ ô vấn đề có một lượt riêng xin tầng dưới của nó, ô con model đánh dấu cần mở thì mở tiếp (tới
 độ sâu 3), mỗi phần được kiểm và sửa
-riêng tối đa `--rounds` lượt (mặc định 3), phần còn lỗi thì bỏ để phần đã đạt không bị kéo theo; cuối cùng một lượt
+riêng tối đa `--rounds` lượt (mặc định 3), phần còn lỗi thì bỏ để phần đã đạt không bị kéo theo (phần chỉ còn số không có trong đoạn được neo, PG220, thì bỏ đúng ô đó); cuối cùng một lượt
 soát thêm ô cho tuyên bố thiếu bằng chứng (PG305) và bảng không ô nào nói tới (PG309), rồi đối chiếu từng
 câu tuyên bố có số hay có phạm vi của tóm tắt và kết luận (chương trình chọn câu, tối đa 6) với bảng, thêm ô "Chỗ lệch:"
-khi bài tự nói khác bảng. Chương trình tự đặt `parent`
+khi bài tự nói khác bảng. Các nhánh, và các câu tuyên bố của cùng một mục, chạy cùng lúc (`--workers`, mặc định 4;
+mỗi lượt thấy sơ đồ lúc nó bắt đầu, chương trình đổi id trùng giữa hai nhánh rồi kiểm lại phần gộp). Chương trình tự đặt `parent`
 của mỗi phần và bỏ ô trùng id, nên một lượt không ghi được ra ngoài nhánh của nó. Trần số lượt gọi cả lần chạy
 `--max-calls` (mặc định 32, kể cả thử lại; một bài thường cần 20–30 lượt; model miễn phí của OpenRouter cho 50 lượt mỗi
 ngày khi tổng tín dụng đã nạp dưới 9 USD, 1.000 lượt khi từ 9 USD trở lên). `--mode one-shot` là cách cũ (cả sơ đồ trong một câu trả lời), giữ để so. Trần tiền `--max-usd` (mặc định
@@ -77,9 +79,20 @@ không đọc được thành sơ đồ (bị cắt, không phải JSON) vẫn g
 nâng `--max-usd`, khoảng 1 USD mỗi lượt với một bài 20 trang. Khoá lấy từ biến
 `OPENROUTER_API_KEY` hay file `~/.config/paper-graph/openrouter.key` (quyền 600); không có cờ nhận khoá. Request đặt
 `data_collection: deny` (nhà cung cấp không lưu, không huấn luyện), nhưng chữ bài vẫn rời máy: bài riêng tư thì dựng
-bằng skill. Đã có `bai.graph.json` thì phải `--force`, và ô đã khoá phải giữ nguyên. Model miễn phí (`…:free`) chỉ chạy khi cho
+bằng skill hay model trên máy (dưới đây). Đã có `bai.graph.json` thì phải `--force`, và ô đã khoá phải giữ nguyên. Model miễn phí (`…:free`) chỉ chạy khi cho
 nhà cung cấp huấn luyện trên chữ gửi đi: bật "Free model training" trong cài đặt OpenRouter và thêm `--allow-training`
 (chỉ nhận model `:free`); chỉ dùng cho bài đã công khai.
+
+Model trên máy (`--local URL`): cùng cách dựng theo tầng, gửi tới máy chủ model chạy trên chính máy này qua API kiểu
+OpenAI, ví dụ Ollama (`http://localhost:11434/v1`) hay LM Studio (`http://localhost:1234/v1`). Lệnh chỉ nhận
+`localhost`, `127.0.0.1`, `[::1]`, không qua proxy, không theo redirect, không đọc khoá OpenRouter; không có `--model` thì
+dùng model duy nhất máy chủ đang có. Mặc định một lượt mỗi lúc (một GPU xếp hàng các request), mỗi lượt chờ tối đa 30
+phút. Bài 20 trang cần ngữ cảnh 30–60 nghìn token, mà Ollama mặc định chỉ 4.096 và lặng lẽ cắt phần đầu: đặt
+`OLLAMA_CONTEXT_LENGTH=65536` trước `ollama serve` (LM Studio: Context Length khi nạp model). Chữ bài đi trong tin nhắn
+system (Ollama quá ngữ cảnh thì bỏ nguyên tin nhắn cũ nhất trừ tin nhắn system). Lệnh dừng khi thấy chữ bị cắt: số token
+máy chủ đọc chạm độ dài ngữ cảnh nó báo (Ollama `/api/ps`, LM Studio `/api/v0/models`), số token đứng yên trong khi chữ
+gửi đi đổi, hay quá 5 ký tự mỗi token; khi đã biết ngữ cảnh, lượt chắc không vừa bị từ chối trước khi gửi. Máy chủ không báo ngữ cảnh thì chỗ cắt nhỏ (dưới khoảng một phần
+tư) có thể lọt. Máy dùng chung với người khác thì cổng loopback không riêng tư.
 
 Đo người đọc có hiểu hơn khi đọc qua sơ đồ không: bộ câu hỏi `bai.quiz.json` (mỗi câu neo về câu trích có thật),
 lệnh `quiz` xuất trang làm bài tự chấm; quy trình đo đổi chéo ở [docs/do-hieu-bai.md](docs/do-hieu-bai.md).
