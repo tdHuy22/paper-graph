@@ -428,7 +428,10 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     (3) xong: đo Dots 3, 5 bài × 2 lần (`.tmp/build/2026-10-23-measure/`, docs/bench.md mục cuối): 10/10 lần 0 lỗi, ghi
     `graph.json`; phủ 131/134 (98%), soi 9/34 (lần 22/10: 1/9); Ignored, Merging phủ ngang skill Opus; 21 phút mỗi bài khi
     hai lần đo chạy cùng lúc (tuần tự 30); cứu nhánh dùng 3 lần; nhánh kết quả bị bỏ 3/10 lần (chỗ yếu tiếp theo).
-    Chưa commit. Tiếp: hỏi commit Mốc 7. Treo: thử model thật với `--local` cần cài
+    Đã commit `c9c4f18` (bạn bảo "commit đi"; `.claude/launch.json` vẫn không commit). Bạn chốt 23/10: TM-30 chấp nhận
+    rủi ro; không thử Ollama thật, đo chỉ bằng model free OpenRouter. Đối chiếu `--local` với tài liệu API (Ollama
+    `openai.go`, `api/types.go`, FAQ; LM Studio REST v0): khớp, không sửa code; README ghi. Chưa commit phần này.
+    Tiếp: 8.2 (nhánh kết quả bị bỏ 3/10 lần). Treo: thử model thật với `--local` cần cài
     Ollama (@ban); TM-30 chấp nhận rủi ro cổng loopback trên máy dùng chung (@ban); Mốc 4 VietPaper chờ repo kia sạch.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
@@ -444,6 +447,8 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - **Không dùng model trả phí trên OpenRouter** (bạn chốt 2026-10-19, sau hai lượt Opus 5.5 hỏng, mất 1,96 USD). Dựng
   sơ đồ bằng skill dung-so-do với Opus trong Claude Code; `build` qua OpenRouter chỉ còn dùng model `:free` (mặc định
   Nemotron free). Không đo thêm DeepSeek, không sửa `build` cho model trả phí.
+
+- 2026-10-23: TM-30 (tiến trình khác trên máy đọc chữ bài gửi qua `--local`): chấp nhận rủi ro, máy một người dùng. Không thử `--local` với Ollama thật; mọi phép đo của `build` chỉ dùng model `:free` của OpenRouter (bạn: "đo thì kết quả kém lắm").
 
 ### Quyết định kỹ thuật tự chốt (đổi được nếu bạn muốn)
 
@@ -527,6 +532,6 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Bộ chấm "đúng tầng" nhận ý tầng đầu tách thành nhiều ô cùng loại; quan hệ không tính một ô với chính nó. (23/10)
 - [x] Đo Dots 3 trên 5 bài có đáp án, mỗi bài 2 lần: phủ 98%, soi 9/34, 0 lỗi cả 10 lần. (23/10)
 - [x] `build --local` gọi model chạy trên máy (Ollama, LM Studio; chỉ localhost) cho bài riêng tư. (23/10; kiểm bằng máy chủ giả, chưa thử model thật)
-- [ ] Thử `--local` với Ollama thật trên một bài (cần cài Ollama và một model). @ban
+- [x] ~~Thử `--local` với Ollama thật trên một bài~~: bỏ, bạn chốt 2026-10-23: không cài Ollama, chỉ đảm bảo `--local` dùng được (kiểm theo tài liệu API); đo chỉ bằng model free của OpenRouter
 - [ ] Nhánh kết quả bị bỏ 3/10 lần vì còn lỗi neo sau 3 lượt sửa: xem lỗi nào lặp, sửa chỉ dẫn hay bước cứu.
 - [ ] Soi bằng hai model free (đối chiếu chéo), làm sau cùng nếu còn đáng.

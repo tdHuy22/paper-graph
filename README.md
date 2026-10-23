@@ -91,7 +91,10 @@ phút. Bài 20 trang cần ngữ cảnh 30–60 nghìn token, mà Ollama mặc �
 `OLLAMA_CONTEXT_LENGTH=65536` trước `ollama serve` (LM Studio: Context Length khi nạp model). Chữ bài đi trong tin nhắn
 system (Ollama quá ngữ cảnh thì bỏ nguyên tin nhắn cũ nhất trừ tin nhắn system). Lệnh dừng khi thấy chữ bị cắt: số token
 máy chủ đọc chạm độ dài ngữ cảnh nó báo (Ollama `/api/ps`, LM Studio `/api/v0/models`), số token đứng yên trong khi chữ
-gửi đi đổi, hay quá 5 ký tự mỗi token; khi đã biết ngữ cảnh, lượt chắc không vừa bị từ chối trước khi gửi. Máy chủ không báo ngữ cảnh thì chỗ cắt nhỏ (dưới khoảng một phần
+gửi đi đổi, hay quá 5 ký tự mỗi token; khi đã biết ngữ cảnh, lượt chắc không vừa bị từ chối trước khi gửi. Đối chiếu
+tài liệu ngày 23/10: Ollama nhận `response_format: json_object`, luôn trả `usage.prompt_tokens`, `/api/ps` có
+`context_length`; LM Studio báo `loaded_context_length` ở API v0 (từ 0.3.6) và báo lỗi thay vì cắt khi quá ngữ cảnh.
+Chưa chạy với Ollama hay LM Studio thật, chỉ với máy chủ giả cùng định dạng (test `Local`). Máy chủ không báo ngữ cảnh thì chỗ cắt nhỏ (dưới khoảng một phần
 tư) có thể lọt. Máy dùng chung với người khác thì cổng loopback không riêng tư.
 
 Đo người đọc có hiểu hơn khi đọc qua sơ đồ không: bộ câu hỏi `bai.quiz.json` (mỗi câu neo về câu trích có thật),
