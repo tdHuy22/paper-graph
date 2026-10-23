@@ -166,6 +166,27 @@ class View(unittest.TestCase):
         outside_data = re.sub(r'<script type="application/json" id="data">.*?</script>', "", page, flags=re.S)
         self.assertNotRegex(outside_data, r"https?://(?!www\.w3\.org/2000/svg)")
 
+    def test_embedded_page_loads_assets_and_has_no_inline_code(self):  # VietPaper TM-14
+        g = graph()
+        evil = '</script><script>alert(1)</script><img src=x onerror=alert(2)>'
+        node(g, "idea")["explain"] = evil
+        g["paper"]["title"] = '</title><script>alert(3)</script>'
+        p = self.d / "toy.graph.json"
+        p.write_text(json.dumps(g), encoding="utf-8")
+        data, _ = view.build_data(p, images=False)
+        page = view.page(dict(data, embed=True), {"token": "t", "version": "v", "api": "/api/abc/graph/"},
+                         assets="/pg/")
+        self.assertIn('<script src="/pg/viewer.js"></script>', page)
+        self.assertIn('<link rel="stylesheet" href="/pg/viewer.css">', page)
+        self.assertNotIn("Content-Security-Policy", page)  # CSP của app chứa trang áp vào
+        self.assertEqual(re.findall(r"<script(?: [^>]*)?>", page),
+                         ['<script type="application/json" id="data">', '<script src="/pg/viewer.js">'])
+        self.assertNotIn("<style>", page)
+        self.assertNotIn("<img src=x", page)
+        self.assertEqual(self.data_of(page)["nodes"]["idea"]["explain"], evil)
+        with self.assertRaises(ValueError):
+            view.page(data, assets='"><script>')
+
     def test_viewer_script_never_writes_markup(self):  # TM-13
         js = (ROOT / "paper_graph/viewer/viewer.js").read_text("utf-8")
         for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",

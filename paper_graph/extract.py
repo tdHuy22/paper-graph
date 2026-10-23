@@ -44,9 +44,14 @@ def load_vietpaper(path: Path):
 
 
 def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, lang: str = "eng",
-            max_pages: int = MAX_PAGES, progress=None) -> dict:
+            max_pages: int = MAX_PAGES, progress=None, app=None, given: dict | None = None) -> dict:
+    """`app`, `given`: khi VietPaper gọi thẳng (đang chạy, đã nạp sẵn module của nó). `given` là khối VietPaper đã
+    trích cho từng trang, {số trang đếm từ 0: (khối, có OCR không)}: dùng đúng các khối đó (cả khối OCR bằng VLM, thứ
+    không trích lại được) để số thứ tự đoạn `p{n}-b{k}` khớp số hiệu đoạn k-1 của VietPaper, nên bản dịch và vị trí
+    đoạn tra thẳng theo id. Gọi kiểu này thì không huỷ phiên model bố cục: server còn dùng."""
     data = read_regular(pdf, "PDF", MAX_PDF_BYTES)
-    app = load_vietpaper(vietpaper)
+    embedded = app is not None
+    app = app if embedded else load_vietpaper(vietpaper)
     import pymupdf  # noqa: PLC0415 - có sẵn trong venv của VietPaper
 
     try:
@@ -77,9 +82,15 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
                                                         for g in regions]
         has_text = app.page_has_text(page) and not app.text_is_garbled(page)
         raw: list[dict] = []
-        if has_text:  # dòng chữ của get_text theo toạ độ nội dung: so với vùng đã đổi về cùng hệ
-            raw = app.extract_blocks(page, regions=content_regions)
         used_ocr = False
+        if given is not None and i in given:
+            raw, used_ocr = given[i]
+            raw = list(raw or [])
+            if used_ocr:  # khối OCR theo toạ độ hiển thị như dòng OCR ở dưới
+                raw = [{**b, "bbox": _content(page, b["bbox"])} for b in raw]
+            used_ocr = bool(used_ocr and raw)
+        elif has_text:  # dòng chữ của get_text theo toạ độ nội dung: so với vùng đã đổi về cùng hệ
+            raw = app.extract_blocks(page, regions=content_regions)
         # OCR khi trang không có lớp chữ, hay có mà bộ gom đoạn không lấy được đoạn nào: VietPaper bỏ dòng không nằm
         # ngang, nên trang ngang trong phụ lục (chữ vẽ xoay, rồi /Rotate) ra 0 đoạn; OCR đọc trên ảnh hiển thị, nơi
         # chữ đó nằm ngang. Dòng OCR theo toạ độ hiển thị: so với vùng gốc, rồi đổi khung đoạn.
@@ -97,7 +108,7 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
             info["label"] = label
         if used_ocr:
             info["ocr"] = True
-        if has_text and not raw:
+        if has_text and not raw and not used_ocr:
             info["unread"] = True  # có lớp chữ mà không ra đoạn nào: `read` báo, đừng để trang rỗng mà im lặng
         out["pages"].append(info)
 
@@ -112,7 +123,11 @@ def extract(pdf: Path, vietpaper: Path = DEFAULT_VIETPAPER, ocr: bool = False, l
                            "label": b.get("label") or "text", "text": text})
         out["blocks"] += blocks
         out["figures"] += figures(n, content_regions or [], blocks, page)
-    release(app)
+    if given is not None:  # verify-blocks không trích lại được khối OCR bằng VLM: ghi rõ nguồn
+        out["source"]["extractor"] += " · khối đã trích của VietPaper"
+        out["source"]["ocr"] = any(p.get("ocr") for p in out["pages"])
+    if not embedded:
+        release(app)
     return out
 
 

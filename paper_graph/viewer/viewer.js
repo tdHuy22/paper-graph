@@ -216,11 +216,15 @@
   function select(id, focus) {
     var n = node(id);
     if (!n) return;
-    if ((n.parent || "") !== tier) { go(n.parent || "", id, focus); return; }
-    selected = id;
-    mark();
-    card(id);
-    if (focus) focusNode(id);
+    if ((n.parent || "") !== tier) go(n.parent || "", id, focus);
+    else {
+      selected = id;
+      mark();
+      card(id);
+      if (focus) focusNode(id);
+    }
+    // nhúng trong VietPaper: cuộn bài tới câu trích đầu, chỉ khi người đọc chọn ô (thẻ vẽ lại sau khi lưu thì không)
+    if (D.embed && (n.anchors || []).length) reveal(n.anchors[0]);
   }
 
   // một hình: ảnh bấm để phóng to, tên và trang, vì sao gắn vào ô (kèm nút tới ô trung gian), chú thích của bài
@@ -258,6 +262,8 @@
   // ---------------------------------------------------------------- chế độ sửa (chỉ khi trang do `serve` phục vụ)
   var GRID = 8;
   var justDragged = false;
+  // VietPaper đặt route sửa của từng bài (`/api/<bài>/graph/`); `serve` dùng route mặc định
+  var API = D.edit && typeof D.edit.api === "string" && /^\/[\w\/-]*\/$/.test(D.edit.api) ? D.edit.api : "/api/";
 
   function say(text, bad) {
     var m = document.getElementById("msg");
@@ -306,7 +312,7 @@
     }
     var lock = el("button", "", n.status === "locked" ? "Mở khoá" : "Khoá ô");
     lock.type = "button";
-    lock.addEventListener("click", function () { api("/api/edit", { node: id, set: { status: n.status === "locked" ? "accepted" : "locked" } }); });
+    lock.addEventListener("click", function () { api(API + "edit", { node: id, set: { status: n.status === "locked" ? "accepted" : "locked" } }); });
     row.appendChild(lock);
     box.appendChild(row);
     if (n.status === "locked") box.appendChild(el("p", "muted", "Ô đã khoá: lần dựng lại sau giữ nguyên ô này. Mở khoá để sửa chữ."));
@@ -349,7 +355,7 @@
       while (errs.firstChild) errs.removeChild(errs.firstChild);
       if (!lab.value.trim()) { errs.appendChild(el("li", "", "Nhãn không được trống.")); lab.focus(); return; }
       save.disabled = true;
-      api("/api/edit", { node: id, set: { label: lab.value, term: term.value, explain: exp.value } }, function (err) {
+      api(API + "edit", { node: id, set: { label: lab.value, term: term.value, explain: exp.value } }, function (err) {
         save.disabled = false;
         if (err) (err.diags || []).forEach(function (d) { errs.appendChild(el("li", "", d)); });
       });
@@ -367,7 +373,7 @@
     function snap(v) { return Math.max(0, Math.round(v / GRID) * GRID); }
     var pos = {};
     pos[id] = [snap(num(b.x) + dx - sh[0]), snap(num(b.y) + dy - sh[1])];
-    api("/api/move", { tier: key, pos: pos });
+    api(API + "move", { tier: key, pos: pos });
   }
 
   function draggable(g, id, b) {
@@ -604,6 +610,13 @@
     c.appendChild(el("p", "muted", "Bấm một ô để xem giải thích, câu trích nguyên văn và hình liên quan. Ô có dấu ▸ mở ra được tầng dưới."));
   }
 
+  // báo trang chứa trình xem (VietPaper) cuộn hai bản tới đoạn của câu trích; trang đó tự kiểm tin đến từ khung nào
+  // `go`: người đọc bấm "Xem trong bài" (trang chứa có thể đóng khung sơ đồ đang che bài, như trên điện thoại)
+  function reveal(a, go) {
+    if (window.parent === window) return;
+    window.parent.postMessage({ pg: "anchor", page: a.page, block: a.block || null, go: !!go }, "*");
+  }
+
   function card(id) {
     var n = node(id), c = document.getElementById("card");
     while (c.firstChild) c.removeChild(c.firstChild);
@@ -647,6 +660,16 @@
       anchors.forEach(function (a) {
         var q = el("blockquote", "", a.quote);
         q.appendChild(el("span", "where", "trang " + num(a.page) + (a.block ? " · đoạn " + a.block : "")));
+        if (typeof a.vi === "string" && a.vi) {
+          q.appendChild(el("span", "vi-label", a.vi_whole ? "Bản dịch cả đoạn" : "Bản dịch"));
+          q.appendChild(el("span", "vi", a.vi));
+        }
+        if (D.embed) {
+          var go = el("button", "inline", "Xem trong bài");
+          go.type = "button";
+          go.addEventListener("click", function () { reveal(a, true); });
+          q.appendChild(el("span", "go")).appendChild(go);
+        }
         var shot = a.block ? image(a.block) : null;
         if (shot) {
           var d = el("details", ""), s = el("summary", "", "Xem đoạn gốc trong bài");
@@ -681,6 +704,7 @@
     }
   }
 
+  if (D.embed) document.body.classList.add("embed");  // trong khung hẹp của VietPaper: đầu trang gọn
   document.getElementById("title").textContent = String(D.title || "");
   document.getElementById("foot").textContent = D.note || "";
   var nfig = Object.keys(D.figures || {}).length, figsBtn = document.getElementById("figs");
@@ -702,7 +726,7 @@
     if (selected !== null) card(selected); else intro();
   });
   document.getElementById("relayout").addEventListener("click", function () {
-    if (D.edit) api("/api/move", { tier: tier, reset: true });
+    if (D.edit) api(API + "move", { tier: tier, reset: true });
   });
   if (D.edit) say("Chế độ sửa: kéo ô để đặt chỗ (Alt + mũi tên bằng bàn phím), sửa chữ và khoá ô trong thẻ.", false);
   var zoomBox = document.getElementById("zoom");

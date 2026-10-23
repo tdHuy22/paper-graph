@@ -148,11 +148,24 @@ def build_data(graph_path: Path, blocks_path: Path | None = None, pdf: Path | No
     return data, stats
 
 
-def page(data: dict, edit: dict | None = None) -> str:
+def page(data: dict, edit: dict | None = None, assets: str | None = None) -> str:
     """HTML tự chứa. `edit` ({token, version}) bật chế độ sửa khi trang do `serve` phục vụ: CSP thêm
-    `connect-src 'self'` để trang gửi sửa đổi về đúng server đó."""
+    `connect-src 'self'` để trang gửi sửa đổi về đúng server đó.
+
+    `assets` (đường dẫn kiểu `/pg/`): trang nhúng trong app khác (VietPaper). CSS và JS nạp từ `<assets>viewer.css`,
+    `<assets>viewer.js` do app đó phục vụ, không nội tuyến, không thẻ CSP riêng: trang đặt trong `<iframe srcdoc>`
+    thừa kế CSP của app (`script-src 'self'`), nên script chèn vào chữ của sơ đồ không chạy được (VietPaper TM-14)."""
     if edit is not None:
         data = dict(data, edit=edit)
+    if assets is not None:
+        if not re.fullmatch(r"/[\w/-]*/", assets):
+            raise ValueError(f"đường dẫn asset lạ: {assets!r}")
+        template = (ASSETS / "template.html").read_text("utf-8")
+        template = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n', "", template)
+        template = template.replace("<style>{{STYLE}}</style>", f'<link rel="stylesheet" href="{assets}viewer.css">')
+        template = template.replace("<script>{{SCRIPT}}</script>", f'<script src="{assets}viewer.js"></script>')
+        values = {"TITLE": html.escape(data.get("title") or "Sơ đồ bài báo", quote=True), "DATA": _json_for_html(data)}
+        return re.sub(r"\{\{([A-Z]+)\}\}", lambda mt: values[mt.group(1)], template)
     style = (ASSETS / "viewer.css").read_text("utf-8")
     script = (ASSETS / "viewer.js").read_text("utf-8")
     csp = (f"default-src 'none'; script-src {_sha(script)}; style-src {_sha(style)}; img-src data:; "

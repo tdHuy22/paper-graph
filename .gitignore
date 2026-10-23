@@ -14,3 +14,5 @@ __pycache__/
 papers/**/*.html
 # bộ đồ gửi người đọc (PDF, trang nhúng chữ của bài): tạo lại theo docs/do-hieu-bai.md "Bộ đồ đã sẵn"
 papers/do-hieu-bai/
+# pip install -e (VietPaper dùng paper-graph như thư viện)
+*.egg-info/

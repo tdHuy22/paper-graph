@@ -72,6 +72,25 @@ class Extract(unittest.TestCase):
         self.assertTrue(b.find("whichprecludesparallelization", 1))
         self.assertTrue(all(blk.id.startswith(f"p{blk.page}-b") for blk in b.blocks.values()))
 
+    def test_given_blocks_keep_vietpaper_numbering(self):  # VietPaper đưa khối đã trích (cả khối OCR)
+        pdf = self.dir / "g.pdf"
+        make_pdf(pdf, 2, "Recurrent widgets process tokens one at a time, which precludes parallelization.")
+        app = ex.load_vietpaper(ex.DEFAULT_VIETPAPER)
+        self.addCleanup(ex.release, app)  # để phiên ONNX sống tới lúc Python tắt thì onnxruntime có lúc chết (xem release)
+        given = {0: ([{"bbox": [72, 72, 300, 90], "text": "Scanned words from OCR", "label": "text"},
+                      {"bbox": [72, 100, 300, 120], "text": "   ", "label": "text"},
+                      {"bbox": [72, 130, 300, 150], "text": "Second <b>scanned</b> line", "label": "text"}], True)}
+        doc = ex.extract(pdf, app=app, given=given)
+        ids = [b["id"] for b in doc["blocks"] if b["page"] == 1]
+        self.assertEqual(ids, ["p1-b1", "p1-b3"])  # đoạn rỗng bị bỏ nhưng số thứ tự giữ nguyên chỗ
+        self.assertEqual(doc["blocks"][1]["text"], "Second scanned line")
+        self.assertTrue(doc["pages"][0].get("ocr"))
+        self.assertTrue(doc["source"]["ocr"])
+        self.assertIn("VietPaper", doc["source"]["extractor"])
+        self.assertTrue(any(b["page"] == 2 for b in doc["blocks"]))  # trang không đưa thì tự trích
+        self.assertEqual(blocks_mod.parse(doc)[1], [])
+        self.assertIn("sess", app._layout)  # gọi từ server: không huỷ phiên model bố cục
+
     def test_verify_catches_tampered_blocks(self):  # TM-3
         pdf = self.dir / "t.pdf"
         make_pdf(pdf, 1, "Recurrent widgets process tokens one at a time, which precludes parallelization.")

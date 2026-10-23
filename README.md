@@ -119,6 +119,19 @@ Câu trích bịa, chép sai trang, hay quá ngắn đều bị bắt, kèm gợ
   → có ở tr.1 (đoạn p1-b12)
 ```
 
+## Trong VietPaper
+
+VietPaper dùng paper-graph như thư viện: `../pdf-translator/.venv/bin/pip install -e ../paper-graph` (`pyproject.toml`
+không có dependency nào). Tab 🗺 Sơ đồ của VietPaper dựng, xem, sửa sơ đồ của bài đang đọc; bấm ô thì hai bản gốc và dịch
+cuộn tới đúng đoạn, thẻ có bản dịch của câu trích (README của VietPaper, mục "Sơ đồ bài báo"). Phần paper-graph cung cấp:
+
+- `extract.extract(pdf, app=<module VietPaper>, given={trang: (khối, có OCR)})`: dùng đúng các khối VietPaper đã trích
+  (cả khối OCR bằng VLM), nên đoạn `p{n}-b{k}` là đoạn số k-1 của trang n-1 trong VietPaper; không huỷ phiên model bố cục.
+- `view.page(data, edit, assets="/pg/")`: trang nhúng nạp `viewer.js`, `viewer.css` từ app chứa nó, không script nội tuyến,
+  không thẻ CSP riêng (đặt trong `<iframe srcdoc>` thì thừa kế CSP của app). Dữ liệu có `embed: true` thì trình xem gửi
+  `postMessage({pg: "anchor", page, block, go})` lên trang chứa khi chọn ô hay bấm "Xem trong bài"; `edit.api` đổi route
+  gửi sửa đổi; neo có `vi` (`vi_whole`) thì thẻ hiện bản dịch.
+
 Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng hai file và toàn bộ mã lỗi ở
 [docs/format.md](docs/format.md); bộ đo và đáp án tay ở [docs/bench.md](docs/bench.md).
 
@@ -129,4 +142,4 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 
 ## Trạng thái
 
-Mốc 1 (lõi kiểm được). Xem [PLAN.md](PLAN.md) §0.
+Mốc 4 (gắn vào VietPaper). Xem [PLAN.md](PLAN.md) §0.
