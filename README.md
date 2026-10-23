@@ -64,12 +64,14 @@ OpenRouter, chạy `check`, gửi lỗi lại cho model sửa. Mặc định (`-
 đầu, mỗi ô tầng đầu trừ ô vấn đề có một lượt riêng xin tầng dưới của nó, ô con model đánh dấu cần mở thì mở tiếp (tới
 độ sâu 3), mỗi phần được kiểm và sửa
 riêng tối đa `--rounds` lượt (mặc định 3), phần còn lỗi thì bỏ để phần đã đạt không bị kéo theo; cuối cùng một lượt
-soát thêm ô cho tuyên bố thiếu bằng chứng (PG305) và bảng không ô nào nói tới (PG309), và một lượt đối
-chiếu thêm ô "Chỗ lệch:" khi tóm tắt nói khác bảng. Chương trình tự đặt `parent`
+soát thêm ô cho tuyên bố thiếu bằng chứng (PG305) và bảng không ô nào nói tới (PG309), rồi đối chiếu từng
+câu tuyên bố có số hay có phạm vi của tóm tắt và kết luận (chương trình chọn câu, tối đa 6) với bảng, thêm ô "Chỗ lệch:"
+khi bài tự nói khác bảng. Chương trình tự đặt `parent`
 của mỗi phần và bỏ ô trùng id, nên một lượt không ghi được ra ngoài nhánh của nó. Trần số lượt gọi cả lần chạy
-`--max-calls` (mặc định 24, kể cả thử lại; một bài thường cần 13–20 lượt; model miễn phí của OpenRouter cho 50 lượt mỗi
+`--max-calls` (mặc định 32, kể cả thử lại; một bài thường cần 20–30 lượt; model miễn phí của OpenRouter cho 50 lượt mỗi
 ngày khi tổng tín dụng đã nạp dưới 9 USD, 1.000 lượt khi từ 9 USD trở lên). `--mode one-shot` là cách cũ (cả sơ đồ trong một câu trả lời), giữ để so. Trần tiền `--max-usd` (mặc định
-0,5 USD) tính cho cả lần chạy. Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`; câu trả lời
+0,5 USD) tính cho cả lần chạy. Model mặc định là `dots-studio/dots-3-note-preview:free` (so 5 model free ngày 22/10,
+docs/bench.md); nó lỗi mãi thì lệnh tự chuyển sang model free dự phòng (`--fallback`, `--no-fallback`). Đạt (0 lỗi, không PG220) thì ghi `bai.graph.json`, chưa đạt thì `bai.graph.draft.json`; câu trả lời
 không đọc được thành sơ đồ (bị cắt, không phải JSON) vẫn ghi ra `bai.graph.raw.txt`. Trước mỗi lượt lệnh in mức tiền
 ước tối đa (tính cả token suy luận, tối đa 8.000; chữ tiếng Việt khoảng 1,7 ký tự mỗi token): model đắt như Opus cần
 nâng `--max-usd`, khoảng 1 USD mỗi lượt với một bài 20 trang. Khoá lấy từ biến

@@ -242,7 +242,9 @@ def cmd_serve(a) -> int:
 
 
 def cmd_build(a) -> int:
-    from .build import build, raw_path  # noqa: PLC0415
+    from .build import DEFAULT_FALLBACKS, DEFAULT_MODEL, build, raw_path  # noqa: PLC0415
+
+    a.model = a.model or DEFAULT_MODEL
 
     if not 0 <= a.rounds <= 6:
         raise InputError("--rounds phải trong khoảng 0–6")
@@ -254,13 +256,18 @@ def cmd_build(a) -> int:
         raise InputError(f"{a.model} là model miễn phí: OpenRouter chỉ chạy khi cho nhà cung cấp huấn luyện trên chữ bài. "
                          "Bài đã công khai thì thêm --allow-training (và bật \"Free model training\" ở "
                          "openrouter.ai/settings/privacy); bài riêng tư thì dựng bằng skill trong Claude Code")
-    if a.allow_training:
-        print(f"CẢNH BÁO: chữ của bài gửi tới OpenRouter ({safe(a.model, 100)}) với data_collection: allow — nhà "
-              "cung cấp model miễn phí được lưu và dùng nó để huấn luyện. Chỉ dùng cho bài đã công khai.", flush=True)
-    else:
-        print(f"Chữ của bài sẽ gửi tới OpenRouter ({safe(a.model, 100)}), nhà cung cấp không lưu, không huấn luyện "
-              "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model local.", flush=True)
     extra = {"max_calls": a.max_calls} if a.mode == "tiers" else {}
+    fallbacks = [] if a.no_fallback else (a.fallback or (list(DEFAULT_FALLBACKS) if a.model == DEFAULT_MODEL else []))
+    if fallbacks:
+        extra["fallbacks"] = fallbacks
+    models = safe(", ".join([a.model, *fallbacks]), 300)
+    also = " (model đầu, các model sau chỉ dùng khi model trước lỗi mãi)" if fallbacks else ""
+    if a.allow_training:
+        print(f"CẢNH BÁO: chữ của bài gửi tới OpenRouter ({models}){also} với data_collection: allow — nhà cung cấp "
+              "model miễn phí được lưu và dùng nó để huấn luyện. Chỉ dùng cho bài đã công khai.", flush=True)
+    else:
+        print(f"Chữ của bài sẽ gửi tới OpenRouter ({models}){also}, nhà cung cấp không lưu, không huấn luyện "
+              "(data_collection: deny). Bài riêng tư thì dựng bằng skill hay model local.", flush=True)
     res, path = build(Path(a.blocks), a.model, a.rounds, a.max_usd, force=a.force, allow_training=a.allow_training,
                       say=lambda m: print(safe(m, 500), flush=True), mode=a.mode, **extra)
     print(f"{res.rounds} lượt, {res.cost:.4f} USD")
@@ -365,15 +372,19 @@ def main(argv=None) -> int:
     u = sub.add_parser("build", help="dựng sơ đồ bằng model qua OpenRouter (khoá: biến OPENROUTER_API_KEY hay "
                                      "~/.config/paper-graph/openrouter.key)")
     u.add_argument("blocks")
-    u.add_argument("--model", default="nvidia/nemotron-3.5-super-vl:free",
-                   help="id model trên OpenRouter (mặc định miễn phí, cần --allow-training)")
+    u.add_argument("--model", default=None,
+                   help="id model trên OpenRouter (mặc định: build.DEFAULT_MODEL, miễn phí, cần --allow-training)")
     u.add_argument("--mode", choices=("tiers", "one-shot"), default="tiers",
                    help="tiers (mặc định): mỗi lượt xin một tầng, khung trước rồi mở từng ô; one-shot: cả sơ đồ "
                         "trong một câu trả lời (cách cũ, giữ để so)")
+    u.add_argument("--fallback", action="append", metavar="MODEL",
+                   help="model :free dự phòng khi model chính vẫn lỗi sau các lần thử lại (lặp cờ để thêm; mặc định với "
+                        "model mặc định: nemotron-3.5-super-vl, nemotron-3-super-120b)")
+    u.add_argument("--no-fallback", action="store_true", help="không chuyển sang model dự phòng")
     u.add_argument("--rounds", type=int, default=3,
                    help="số lượt sửa theo lỗi của check, cho mỗi phần (tiers) hay cả sơ đồ (one-shot); mặc định 3")
-    u.add_argument("--max-calls", type=int, default=24,
-                   help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 24, tối đa 40)")
+    u.add_argument("--max-calls", type=int, default=32,
+                   help="tiers: trần số lượt gọi cả lần chạy, kể cả thử lại (mặc định 32, tối đa 40)")
     u.add_argument("--max-usd", type=float, default=0.5, help="trần tiền cho cả lần chạy (mặc định 0,5 USD)")
     u.add_argument("--force", action="store_true", help="dựng lại khi đã có graph.json (ô khoá phải giữ nguyên)")
     u.add_argument("--allow-training", action="store_true",

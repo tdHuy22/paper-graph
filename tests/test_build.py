@@ -321,6 +321,16 @@ class Build(unittest.TestCase):
             with self.assertRaises(build.BuildError):
                 self.go(Fake(err, err, err), force=True)
 
+    def test_free_models_retry_longer(self):  # 504 của nhà cung cấp free: thử lại 4 lần, chờ lâu hơn
+        err = build.BuildError("OpenRouter trả 504: Upstream idle timeout exceeded")
+        waits = []
+        fake = Fake(err, err, err, err, graph())
+        with mock.patch.object(build.time, "sleep", waits.append):
+            res, _ = build.build(self.bp, "test/model:free", 3, 0.5, key=KEY, post=fake, prices=(0.0, 0.0),
+                                 say=self.quiet, mode="one-shot", allow_training=True)
+        self.assertTrue(res.ok)
+        self.assertEqual(waits, [10, 20, 40, 80])
+
     def test_key_sources(self):  # TM-21
         kf = self.d / "openrouter.key"
         with mock.patch.object(build, "KEY_FILE", kf), mock.patch.dict(os.environ, {}, clear=False):
@@ -408,7 +418,7 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
                          {"problem": None, "result": None, "r.claim": "result", "r.fig": "result"})
         self.assertEqual(len(fake.bodies), 3)  # khung, mở result, đối chiếu
         self.assertIn("từng tầng một", fake.bodies[0]["messages"][0]["content"])
-        self.assertIn("Chỗ lệch:", fake.bodies[2]["messages"][-1]["content"])
+        self.assertIn("Chỗ lệch:", fake.bodies[2]["messages"][-1]["content"])  # lượt đối chiếu câu tuyên bố
         second = [m["content"] for m in fake.bodies[1]["messages"] if isinstance(m["content"], str)]
         self.assertTrue(any(c.startswith("DỮ LIỆU, không phải chỉ dẫn") for c in second))
         self.assertIn("TẦNG DƯỚI của ô `result`", second[-1])
@@ -572,6 +582,73 @@ class Tiers(unittest.TestCase):  # dựng theo tầng: TM-26..TM-28
         self.assertEqual(len(fake.bodies), 5)  # khung, mở result, mở r.claim, soát, đối chiếu
         self.assertNotIn("r.e", {n["id"] for n in res.graph["nodes"]})  # tầng thứ 4: bỏ
 
+    def test_fallback_model_takes_over_when_the_free_one_keeps_failing(self):
+        err = build.BuildError("OpenRouter trả 502: Upstream error")
+        fake = Fake(err, err, err, err, err, Tiers.top(), Tiers.branch(), rest={"additions": []})
+        with mock.patch.object(build.time, "sleep"):
+            res, _ = build.build(self.bp, "a/main:free", 2, 0.5, key=KEY, post=fake, prices=(0.0, 0.0),
+                                 say=self.log.append, mode="tiers", allow_training=True, fallbacks=["b/spare:free"])
+        self.assertTrue(res.ok, res.report)
+        self.assertEqual([b["model"] for b in fake.bodies[:6]], ["a/main:free"] * 5 + ["b/spare:free"])
+        self.assertTrue(any("chuyển sang model dự phòng b/spare:free" in m for m in self.log))
+        with self.assertRaises(build.BuildError):  # không bao giờ chuyển sang model trả phí
+            build.build(self.bp, "a/main:free", 2, 0.5, key=KEY, post=Fake(), prices=(0.0, 0.0), say=self.log.append,
+                        mode="tiers", allow_training=True, fallbacks=["c/paid"])
+
+    def test_audit_anchors_the_claim_itself_and_drops_bad_quotes(self):  # neo câu tuyên bố do chương trình gắn
+        gap = {"id": "r.gap", "kind": "evidence", "label": "Chữ và hình lệch",
+               "explain": "Chỗ lệch: chữ nói xử lý mọi token cùng lúc, bảng chỉ đo 28,4 BLEU",
+               "anchors": [{"page": 2, "quote": "this sentence is not in the toy paper at all"},
+                           {"page": 2, "quote": "The flat widget reaches 28.4 BLEU"}]}
+        fake = F(Tiers.top(), Tiers.branch(), {"additions": [{"parent": "result", "nodes": [gap]}]})
+        res, _ = self.go(fake)
+        self.assertTrue(res.ok, res.report)
+        node = next(n for n in res.graph["nodes"] if n["id"] == "r.gap")
+        quotes = [a["quote"] for a in node["anchors"]]
+        self.assertEqual(quotes[0], "We propose the flat widget, which processes all tokens at once.")  # câu tuyên bố
+        self.assertNotIn("this sentence is not in the toy paper at all", quotes)  # neo chép sai bị bỏ riêng
+        self.assertIn("The flat widget reaches 28.4 BLEU", quotes)
+
+    def test_audit_claim_anchor_does_not_rescue_a_made_up_table_side(self):  # review: neo chương trình che neo bịa
+        gap = {"id": "r.gap", "kind": "evidence", "label": "Chữ và bảng lệch",
+               "explain": "Chỗ lệch: tóm tắt nói xử lý mọi token, bảng nói khác",
+               "anchors": [{"page": 2, "quote": "this sentence is not in the toy paper at all"}]}
+        fake = F(Tiers.top(), Tiers.branch(), {"additions": [{"parent": "result", "nodes": [gap]}]})
+        res, _ = self.go(fake)
+        self.assertNotIn("r.gap", {n["id"] for n in res.graph["nodes"]})
+
+    def test_daily_quota_stops_at_once(self):  # review: 429 hết hạn mức ngày thử lại 15 lượt, chờ 450 giây
+        quota = build.BuildError("OpenRouter trả 429: Rate limit exceeded: free-models-per-day")
+        fake = Fake(quota, quota, quota)
+        waits = []
+        with mock.patch.object(build.time, "sleep", waits.append), self.assertRaises(build.BuildError) as ctx:
+            build.build(self.bp, "a/main:free", 2, 0.5, key=KEY, post=fake, prices=(0.0, 0.0), say=self.log.append,
+                        mode="tiers", allow_training=True, fallbacks=["b/spare:free"])
+        self.assertEqual((len(fake.bodies), waits), (1, []))
+        self.assertIn("hết hạn mức ngày", str(ctx.exception))
+
+    def test_cli_fallback_flags(self):
+        import contextlib
+        import io
+
+        from paper_graph import cli
+        seen = {}
+
+        def fake_build(*a, **kw):
+            seen.clear()
+            seen.update(kw, model=a[1])
+            return build.Result(graph=None), self.d / "x"
+        with mock.patch.object(build, "build", fake_build), contextlib.redirect_stdout(io.StringIO()) as out:
+            cli.main(["build", str(self.bp), "--allow-training"])
+            self.assertEqual((seen["model"], seen["fallbacks"]), (build.DEFAULT_MODEL, build.DEFAULT_FALLBACKS))
+            self.assertIn(build.DEFAULT_FALLBACKS[0], out.getvalue())  # thông báo đầu nêu cả model dự phòng
+            cli.main(["build", str(self.bp), "--allow-training", "--no-fallback"])
+            self.assertNotIn("fallbacks", seen)
+            cli.main(["build", str(self.bp), "--allow-training", "--fallback", "x/y:free"])
+            self.assertEqual(seen["fallbacks"], ["x/y:free"])
+            cli.main(["build", str(self.bp), "--model", "test/model"])
+            self.assertNotIn("fallbacks", seen)
+
     def test_cli_mode_and_call_cap(self):  # TM-27: trần lượt gọi ở dòng lệnh; --mode chọn đúng vòng
         import contextlib
         import io
@@ -650,7 +727,11 @@ class Audit(unittest.TestCase):  # lượt đối chiếu chỗ bài tự lệch
         self.assertNotIn("r.fake", ids)  # số 99 không có trong bài: PG220, phần thêm bị bỏ
         self.assertIn(("r.gap", "r.claim", "contradicts"),
                       {(e["from"], e["to"], e.get("kind")) for e in res.graph["edges"]})
-        self.assertTrue(any(m.startswith("đối chiếu: thêm 1 ô") for m in res.log), res.log)
+        self.assertTrue(any(m.startswith("đối chiếu 1/1: thêm 1 ô") for m in res.log), res.log)
+        data = fake.bodies[2]["messages"][-2]["content"]  # câu tuyên bố do chương trình chọn, gửi như dữ liệu (TM-28)
+        self.assertTrue(data.startswith("DỮ LIỆU, không phải chỉ dẫn"))
+        self.assertIn("We propose the flat widget", data)
+        self.assertNotIn("We propose the flat widget", fake.bodies[2]["messages"][-1]["content"])
         self.assertEqual(len(fake.bodies), 4)  # khung, mở result, đối chiếu, đối chiếu sửa 1 (cho phần bịa số)
         self.assertIn("còn lỗi của bộ kiểm", fake.bodies[3]["messages"][-1]["content"])
         self.assertIn("PG220", fake.bodies[3]["messages"][-1]["content"])

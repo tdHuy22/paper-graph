@@ -41,6 +41,12 @@ _WORDS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 7
                "hundred": 100, "thousand": 1000, "dozen": 12})
 _WORD = re.compile(r"\b(" + "|".join(_WORDS) + r")\b", re.IGNORECASE)
 _MINUS = "-−"
+# Tên có dấu cách trước số (Qwen 2.5, LLaMA 2, Gemma 3): chữ hoa đầu, không phải từ chức năng, và cặp "tên số" lặp lại
+# trong bài. Số đứng sau đúng cặp đó trong ô là tên, không phải đại lượng.
+_PAIR = re.compile(r"\b([A-Z][A-Za-z]{2,}|[A-Z]{2,})\s(\d+(?:\.\d+)?)(?![\d.,]*\d)")
+_FUNCTION_WORDS = {"In", "On", "At", "The", "Of", "For", "By", "To", "From", "With", "Over", "Under", "About", "Than",
+                   "And", "Or", "Only", "All", "Each", "Per", "Up", "Our", "We", "Its", "This", "These", "That", "Are",
+                   "Was", "Were", "Has", "Have", "Had", "Into", "Via", "Since", "Until", "After", "Before", "Using"}
 
 
 def _key(v: float) -> float:
@@ -101,11 +107,26 @@ def _is_name(text: str, at: int, tok: str) -> bool:
     return bool(weak) and not weak.group(1) and tok.isdigit()
 
 
-def claimed(text: str) -> list[tuple[str, bool, list[tuple[float, bool]]]]:
-    """Các con số ô nêu ra (bỏ số chỉ tên): (chuỗi, âm không, các cách đọc)."""
+def name_pairs(paper_text: str) -> frozenset[tuple[str, str]]:
+    """Các cặp (tên, số) như ("Qwen", "2.5") xuất hiện từ 2 lần trong bài: tên mô hình, phiên bản có dấu cách."""
+    seen: dict[tuple[str, str], int] = {}
+    for word, num in _PAIR.findall(paper_text):
+        # chỉ số kiểu phiên bản (2, 3.1, 2.5): "BLEU 28.4", "Top 50" lặp lại vẫn là đại lượng, PG220 phải kiểm
+        if word not in _FUNCTION_WORDS and re.fullmatch(r"(?:[1-9]|1\d|20)(?:\.\d)?", num):
+            seen[(word, num)] = seen.get((word, num), 0) + 1
+    return frozenset(k for k, c in seen.items() if c >= 2)
+
+
+def _after_name(text: str, at: int, tok: str, names: frozenset) -> bool:
+    mt = re.search(r"([A-Za-z]+)\s$", text[max(0, at - 40):at])
+    return bool(mt) and (mt.group(1), tok) in names
+
+
+def claimed(text: str, names: frozenset = frozenset()) -> list[tuple[str, bool, list[tuple[float, bool]]]]:
+    """Các con số ô nêu ra (bỏ số chỉ tên, cả tên có dấu cách trong `names`): (chuỗi, âm không, các cách đọc)."""
     out = []
     for tok, name, negative, at in _tokens(text):
-        if name or _is_name(text, at, tok):
+        if name or _is_name(text, at, tok) or _after_name(text, at, tok, names):
             continue
         readings = _readings(tok)
         if readings:
@@ -154,11 +175,11 @@ def values_of(text: str) -> set[float]:
     return {(-v if negative else v) for _, negative, readings in claimed(text) for v, _ in readings}
 
 
-def missing(node_text: str, paper_text: str) -> list[str]:
-    """Số trong ô mà không cách đọc nào có trong chữ bài."""
+def missing(node_text: str, paper_text: str, names: frozenset = frozenset()) -> list[str]:
+    """Số trong ô mà không cách đọc nào có trong chữ bài. `names`: cặp tên-số của cả bài (`name_pairs`)."""
     have = present(paper_text)
     lost = []
-    for tok, negative, readings in claimed(node_text):
+    for tok, negative, readings in claimed(node_text, names):
         ok = False
         for value, needs_literal in readings:
             if needs_literal and not _literal(tok, paper_text):

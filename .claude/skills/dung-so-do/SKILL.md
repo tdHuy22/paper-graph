@@ -160,6 +160,8 @@ có `label` ngắn cho nhánh phụ ("vì sao được", "đổi lại").
   của ô liên quan, mở đầu bằng "Chỗ lệch:" để người đọc thấy ngay, nêu cả hai phía với con số của mỗi phía, và neo ô
   vào cả hai chỗ (PG220 cần mỗi số có trong chữ được neo). Chữ nói bảng cho thấy điều mà bảng không có cột nào đo
   ("Bảng 3 cho thấy mô hình ổn định" mà Bảng 3 chỉ có điểm trung bình) cũng là chỗ lệch: ghi ở ô tuyên bố, không nối cạnh.
+  Ô đó sẽ dính PG305 (tuyên bố thiếu bằng chứng) và PG303 (đứng lẻ): hai cảnh báo này đúng là điều muốn nói, để lại và
+  nêu lý do trong báo cáo; đừng thêm cạnh giả để tắt chúng.
 - hình mà chữ của bài không nhắc tới: nối nó với tuyên bố bằng cạnh `weak`, `explain` của ô bằng chứng nói rõ chính
   bạn nối; không nối được với tuyên bố nào thì để PG307 và nêu lý do.
 - dưới `idea` hay `why`: khái niệm (`concept`) người đọc cần nắm để hiểu ý chính. Tuyên bố về tính chất của cách làm
@@ -203,7 +205,9 @@ thừa thì bỏ tuyên bố phụ ít quan trọng nhất và nêu trong báo c
   (`keep: true` là giữ tiếng Anh, không thì dùng `vi`). Không có thì tự chọn một cách gọi và giữ nó cho cả sơ đồ.
 - `figure`: gắn hình, bảng, công thức (`p3-f1`) vào ô mà nó minh hoạ hay làm bằng chứng. Hình kiến trúc của bài thường
   là thứ dễ hiểu nhất cả bài: gắn nó vào ô `method`. Mỗi ô một `figure`: bảng chia hai vùng (3a, 3b) thì tách hai ô
-  bằng chứng, hay neo thêm câu trong bài nêu số của vùng kia. Nhiều ô dùng chung một hình thì gắn cho từng ô.
+  bằng chứng, hay neo thêm câu trong bài nêu số của vùng kia. Nhiều ô dùng chung một hình thì gắn cho từng ô. Hình nhiều
+  phần bị cắt thành nhiều id (p6-f1…p6-f4, chỉ một id mang chú thích "Figure 3"): gắn id đúng phần ô đang nói tới; ô nói
+  về cả hình thì gắn id mang chú thích. Trình xem và PG309 nhận hình qua id mang chú thích hay qua chữ "Hình 3" trong ô.
 
 **Con số** (bộ kiểm PG220 đối chiếu từng số trong `label`, `term`, `explain` của ô với chữ của các đoạn được neo, cộng
 chú thích và chữ trong vùng của `figure` gắn với ô; số trong nhãn cạnh với chữ bài của hai đầu; số trong nhãn nhóm

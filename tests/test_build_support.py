@@ -150,6 +150,17 @@ class ReviewFixes(unittest.TestCase):
 
     def test_number_is_one_value_not_a_list(self):  # F1: "41,8" từng khớp nhờ "eight" và "8"
         self.assertEqual(numbers.missing("BLEU 41,8", "achieves 28.4 BLEU on eight GPUs"), ["41,8"])
+
+    def test_spaced_model_names_are_names(self):  # góp ý của agent dựng bài Merging: "Qwen 2.5" dính PG220
+        paper = "We merge Qwen 2.5 and LLaMA 2 models. Qwen 2.5 is newer than LLaMA 2. In 2023 we began."
+        names = numbers.name_pairs(paper)
+        self.assertEqual(names, {("Qwen", "2.5"), ("LLaMA", "2")})  # "In 2023" chỉ một lần, và In là từ chức năng
+        self.assertEqual(numbers.missing("Ở Qwen 2.5 và LLaMA 2, điểm 71,4", "score 71.4", names), [])
+        self.assertEqual(numbers.missing("Ở Qwen 3.5, điểm 71,4", "score 71.4", names), ["3.5"])  # tên không có trong bài
+        self.assertEqual(numbers.missing("Qwen 2.5", "score 71.4"), ["2.5"])  # không truyền tên thì vẫn kiểm
+        both = "BLEU 28.4 on test. Ours gets BLEU 28.4 again. Top 50 here, Top 50 there."
+        self.assertEqual(numbers.name_pairs(both), frozenset())  # đại lượng lặp lại không thành tên (review)
+        self.assertEqual(numbers.missing("BLEU 28.4", "BLEU 41.8", numbers.name_pairs(both)), ["28.4"])
         self.assertEqual(numbers.missing("100.000 bước", "trained on P100 GPUs"), ["100.000"])
         self.assertEqual(numbers.missing("11 bài", "as shown in [11, 12]"), ["11"])
 

@@ -165,3 +165,36 @@ và 4/6, detail 1/3 và 1/3.
   khoảng ba phần tư file (công cụ đọc dừng ở dòng 187/234 và 210/287, mất phụ lục), giống người không đọc hết nhưng không
   do thời gian; ghi chú từ sơ đồ dựa vào chữ tiếng Việt có sẵn, ghi chú từ chữ phải tự dịch. Đây là mô phỏng, không thay
   phép đo người đọc thật (việc 6.1 vẫn mở).
+
+## Việc 6.1 làm bằng người đọc AI (2026-10-22)
+
+Bạn chốt "6.1 sử dụng AI đánh giá" (Sonnet effort medium; Haiku 5.5 không chọn được cho subagent vì tên `haiku` còn trỏ
+Haiku 4.5). Thiết kế đổi chéo như phép đo người thật, trên ba bài model không biết:
+
+| Nhóm | Prism | Ignored | Merging |
+|---|---|---|---|
+| A (r1, r3, r5) | đọc chữ | đọc sơ đồ | đọc chữ |
+| B (r2, r4, r6) | đọc sơ đồ | đọc chữ | đọc sơ đồ |
+
+- 6 người đọc (agent Sonnet), mỗi người đọc cả 3 bài, mỗi bài một cách, viết ghi chú tối đa 250 chữ mỗi bài, không biết
+  câu hỏi; 9 trên 18 ghi chú vượt (294–352 chữ) và được cắt về 250 chữ. 6 agent khác trả lời 12 câu mỗi bài chỉ từ ghi
+  chú, được chọn "Không biết". Tài liệu, ghi chú, câu trả lời và `ket-qua.jsonl` ở `.tmp/do-hieu-bai/2026-10-22-ai/`.
+
+| Bài | Đọc chữ (3 người) | Trung bình | Đọc sơ đồ (3 người) | Trung bình |
+|---|---|---|---|---|
+| Prism | 9, 10, 6 | 8,3 | 10, 8, 7 | 8,3 |
+| Ignored | 7, 6, 6 | 6,3 | 8, 7, 7 | 7,3 |
+| Merging | 6, 7, 4 | 5,7 | 8, 5, 6 | 6,3 |
+| Cộng | 61/108 | | 66/108 | |
+
+- Theo người (trung bình mỗi bài, sơ đồ − chữ): +0,5, +2,0, −1,5, +0,5, +2,0, +0,5; trung vị +0,5; 5 người hơn, 1 kém.
+  Nhóm A: +0,5, −1,5, +2,0; nhóm B: +2,0, +0,5, +0,5.
+- Theo loại câu (đúng / số câu, cộng mọi người): big 18/18 cả hai; mechanism 17/36 chữ, 19/36 sơ đồ; evidence 15/27 cả
+  hai; limit 8/18 và 9/18; detail 3/9 và 5/9.
+- Kết luận: đọc qua sơ đồ nhỉnh hơn đọc chữ một chút (66 so với 61 trên 108 câu, khoảng nửa câu mỗi bài), cùng chiều
+  với lượt mô phỏng ngày 21/10 (25 so với 21 trên 36). Mức hơn nhỏ hơn biến động giữa các người đọc (6 tới 10 điểm trên
+  cùng một bài, cùng một cách), nên chỉ nói được là sơ đồ không làm người đọc hiểu kém đi và có lẽ giúp nhớ ý cơ chế
+  hơn; chưa đủ để nói chắc là giúp.
+- Giới hạn: người đọc là model, không mệt, không giới hạn thời gian; giới hạn trí nhớ bằng 250 chữ ghi chú là giả định;
+  một model cho cả đọc lẫn trả lời; ghi chú từ sơ đồ dùng chữ tiếng Việt có sẵn. Không thay được người đọc thật: bộ đồ
+  ở mục "Bộ đồ đã sẵn" vẫn dùng được khi có người.

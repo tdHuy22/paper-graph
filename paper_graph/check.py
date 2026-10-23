@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from . import figlinks
 from . import model as m
 from .blocks import Blocks
-from .numbers import missing as missing_numbers
+from .numbers import missing as missing_numbers, name_pairs
 from .text import safe, squash, word_count
 
 MAX_PER_TIER = 9
@@ -404,6 +404,7 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
     anchors = AnchorChecker(d, blocks, stats)
     sources: dict[str, str] = {}  # chữ bài mà mỗi ô dựa vào: đoạn được neo, chú thích và chữ của hình
     hits: dict[str, list[str]] = {}  # đoạn chứa câu trích của từng ô, để gắn hình theo chú thích (PG309)
+    names = name_pairs("\n".join(b.text for b in blocks.blocks.values())) if blocks is not None else frozenset()
     for n in nodes.values():
         where = f"ô {n.id}"
         if not n.anchors:
@@ -418,19 +419,19 @@ def check(graph: m.Graph, blocks: Blocks | None, pdf_sha256: str | None = None,
         hits[n.id] = sorted(hit)
         sources[n.id] = _sources(n, hit, blocks)
         if blocks is not None:
-            _numbers(d, where, f"{n.label}\n{n.term}\n{n.explain}", sources[n.id])
+            _numbers(d, where, f"{n.label}\n{n.term}\n{n.explain}", sources[n.id], names)
     for e in graph.edges:
         hit = anchors.check(f"cạnh {e.src}→{e.dst}", e.anchors)
         if blocks is not None and e.label:
             # nhãn cạnh nói về quan hệ giữa hai ô: số của nó phải có trong chữ bài của một trong hai đầu
             own = "\n".join(blocks.blocks[b].text for b in hit)
             _numbers(d, f"cạnh {e.src}→{e.dst}", e.label,
-                     "\n".join([own, sources.get(e.src, ""), sources.get(e.dst, "")]))
+                     "\n".join([own, sources.get(e.src, ""), sources.get(e.dst, "")]), names)
     if blocks is not None:
         for g in graph.groups:
             # nhãn nhóm tóm các thành viên trong ngữ cảnh ô cha ("Encoder · lặp 6 lần" dựa vào ô method)
             ctx = [sources.get(x, "") for x in g.members] + [sources.get(g.parent, "") if g.parent else ""]
-            _numbers(d, f"nhóm {g.id}", g.label, "\n".join(ctx))
+            _numbers(d, f"nhóm {g.id}", g.label, "\n".join(ctx), names)
         if nodes:  # sơ đồ rỗng đã có PG301; báo thêm mọi bảng của bài chỉ là nhiễu
             _unlinked_figures(d, graph, blocks, hits)
     if base is not None:
@@ -482,10 +483,10 @@ def _sources(n: m.Node, hit: set[str], blocks: Blocks | None) -> str:
     return "\n".join(texts)
 
 
-def _numbers(d: _Diags, where: str, text: str, source: str) -> None:
+def _numbers(d: _Diags, where: str, text: str, source: str, names: frozenset = frozenset()) -> None:
     """PG220 (TM-7): số trong chữ của ô (nhãn, thuật ngữ, giải thích), nhãn cạnh hay nhãn nhóm phải có trong chữ bài
-    mà nó dựa vào. Ô không có neo hợp lệ thì mọi số của nó đều bị báo."""
-    lost = missing_numbers(text, source)
+    mà nó dựa vào. Ô không có neo hợp lệ thì mọi số của nó đều bị báo. Số đứng sau tên có trong bài (Qwen 2.5) là tên."""
+    lost = missing_numbers(text, source, names)
     if lost:
         d.warn("PG220", where, "số không có trong chữ bài mà nó dựa vào: " + ", ".join(lost),
                "thêm neo vào câu có số đó, hay viết đúng số như trong bài")

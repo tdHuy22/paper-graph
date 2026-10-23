@@ -376,6 +376,27 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     ghi chú tối đa 250 chữ, agent mới trả lời chỉ từ ghi chú; Prism, Ignored, Merging. Đọc sơ đồ 25/36, đọc chữ 21/36
     (+2, −1, +3), hơn chủ yếu ở câu cơ chế. Một lần mỗi ô, nên chưa chắc. Chi tiết docs/do-hieu-bai.md mục cuối. 6.1
     (người thật) vẫn mở.
+19. **6.1 làm bằng người đọc AI** (2026-10-22, bạn chốt "6.1 sử dụng AI đánh giá", Sonnet medium; đã commit). Đổi
+    chéo 6 người đọc × 3 bài (Prism, Ignored, Merging), ghi chú tối đa 250 chữ, agent khác trả lời chỉ từ ghi chú. Đọc
+    sơ đồ 66/108, đọc chữ 61/108; trung vị theo người +0,5 câu mỗi bài, 5 hơn 1 kém; hơn chủ yếu ở câu cơ chế và chi
+    tiết. Mức hơn nhỏ hơn biến động giữa người đọc. Chi tiết docs/do-hieu-bai.md mục cuối. 6.1 tick.
+20. **Xong: hoàn thiện đường API (`build`)** (2026-10-22, bạn bảo "làm cho hoàn chỉnh và tốt nhất, phải dùng được
+    API"; chưa commit, cùng kết quả 6.1 ở mục 19). Xong: PG220 nhận tên mô hình có dấu cách lặp trong bài (`numbers.
+    name_pairs`, test); SKILL.md: ô chỗ lệch để PG303/PG305 có lý do, hình nhiều mảnh gắn id nào; model `:free` thử lại 4
+    lần chờ 10–80 giây khi 504 (test); đối chiếu từng câu tuyên bố có số của tóm tắt và kết luận (`_claims`,
+    `AUDIT_CLAIM`, tối đa 6 câu), `--max-calls` mặc định 32 (TM-27, README). Đang chạy nền: so 4 model free
+    (`.tmp/build/2026-10-22-models/`, Inkling bị OpenRouter từ chối: chỉ cho ứng dụng agent) và đối chiếu từng câu trên 3
+    sơ đồ 21/10 (`.tmp/build/2026-10-22-audit/`). Lưu ý: lượt so model, RAG chạy code trước khi có đối chiếu từng câu,
+    DataSentinel và Prism chạy code mới. Kết quả so model (docs/bench.md "So model free"): Dots 3 phủ 14/14, 13/13, 13/13, tầng 100% cả ba; Nemotron
+    3.5 RAG 12/14, 71%; Gemma 4, Nemotron Ultra, Inkling hỏng (429, 502, 403). Đã đặt `DEFAULT_MODEL` = dots-3, dự
+    phòng Nemotron 3.5 rồi 3 Super 120B (`_Caller.fallbacks`, `--fallback`, `--no-fallback`, chỉ :free); lượt đối chiếu
+    gắn neo câu tuyên bố tự động và bỏ riêng neo hỏng (`_drop_bad_anchors`); threat model ghi bổ sung. Bản phát triển ở
+    `../paper-graph-dev` (đã chép vào repo). 252+ test đạt. Đang chạy: reviewer sonnet; đo lượt đối chiếu mới trên sơ đồ
+    Dots 3 (`.tmp/build/2026-10-23-audit/`). Review sonnet: 3 vừa, 4 thấp, sửa cả 7 (neo chương trình
+    che neo bịa; "BLEU 28.4" lặp thành tên; 429 hết hạn mức ngày thử lại 15 lượt; dự phòng dùng giới hạn của model chính;
+    câu tuyên bố trong tin nhắn chỉ dẫn; `_claims` đếm số trích dẫn; thiếu test CLI), ghi ở threat model; 259 test đạt
+    (biên nhận). Đối chiếu bằng code đã sửa trên sơ đồ Dots 3: RAG thêm 1 ô chỗ lệch đúng ("ba" so với "bốn" tập QA), điểm soi
+    không đổi (1 trên 9); docs/bench.md mục cuối. Đã commit (bạn bảo "commit đi").
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -456,7 +477,7 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 
 - [x] Chế độ "đoán trước rồi mở": ẩn tầng dưới, người đọc ghi dự đoán, rồi so.
 - [x] Đo hiểu bài: vài câu hỏi mỗi bài, so đọc chữ với đọc qua sơ đồ. (công cụ, câu hỏi, quy trình)
-- [ ] Chạy phép đo với người đọc thật theo `docs/do-hieu-bai.md`, ghi kết quả @ban
+- [x] Chạy phép đo theo `docs/do-hieu-bai.md`, ghi kết quả: làm bằng người đọc AI theo bạn chốt 2026-10-22 (sơ đồ 66/108, chữ 61/108; bộ đồ cho người thật vẫn sẵn)
 
 ### Mốc 6: cải thiện pipeline (từ 2026-10-19)
 

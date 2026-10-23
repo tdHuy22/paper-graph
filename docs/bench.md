@@ -305,3 +305,40 @@ không thấy kết quả của nhau.
   tầng đầu (đa dạng, so với temperature), skill cho phép, còn gold chỉ có một ý `result`: cùng kiểu lệch đáp án đã gặp ở
   Prism. Không sửa gold theo sơ đồ.
 - Đo hiểu bài bằng model (docs/do-hieu-bai.md, `.tmp/do-hieu-bai/2026-10-21-merging/`): xem bảng ở docs/do-hieu-bai.md.
+
+## So model free cho `build` (2026-10-22)
+
+Cùng code (`--mode tiers`, mặc định), mỗi model dựng RAG, DataSentinel, Prism một lần, chạy song song (`.tmp/build/2026-10-22-
+models/`). Danh sách model `:free` của OpenRouter có 17 model; chọn 5 có ngữ cảnh từ 256 nghìn token và câu trả lời đủ dài.
+
+| Model | RAG | DataSentinel | Prism | Ghi chú |
+|---|---|---|---|---|
+| `dots-studio/dots-3-note-preview:free` | phủ 14/14, tầng 100%, quan hệ 100%, 47 ô | 13/13, 100%, 80%, soi 1/2, 58 ô | 13/13, 100%, 100%, 34 ô | 19–25 lượt, khoảng 30 phút mỗi bài |
+| `nvidia/nemotron-3.5-super-vl:free` (mặc định cũ) | 12/14, 71%, 40%, 51 ô | dừng giữa chừng | chưa chạy | chậm (gần 80 phút cho RAG) |
+| `google/gemma-4-31b-it:free` | hỏng | hỏng | hỏng | 429: nhà cung cấp giới hạn lượt dùng chung, hai lần chạy |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | hỏng | hỏng | hỏng | 502 của nhà cung cấp, hai lần chạy |
+| `thinkingmachines/inkling:free` | hỏng | hỏng | hỏng | 403: chỉ mở cho ứng dụng agent của OpenRouter |
+
+- Chọn Dots 3 làm model mặc định: phủ đủ ý bắt buộc và đúng tầng ở cả ba bài, hơn mọi lần đo trước của Nemotron (lần đo chốt
+  21/10: 14/14, 12/13, 13/13; tầng 93%, 92%, 92%). Điểm soi vẫn thấp (1 trên 9).
+- Dự phòng (`DEFAULT_FALLBACKS`, cờ `--fallback`, `--no-fallback`): khi model đang dùng vẫn lỗi sau các lần thử lại, chuyển
+  sang Nemotron 3.5 rồi Nemotron 3 Super 120B; chỉ model `:free`. Dots 3 là bản "preview", có thể bị gỡ: dự phòng giữ
+  `build` chạy được.
+- Giới hạn: một lần chạy mỗi ô; lượt chạy của RAG dùng code trước khi có đối chiếu từng câu, DataSentinel và Prism dùng code
+  có (cùng phiên bản cho mọi model trong một bài).
+
+### Đối chiếu từng câu tuyên bố trên sơ đồ Dots 3 (2026-10-23)
+
+Code sau review (neo câu tuyên bố do chương trình gắn, bỏ riêng neo hỏng, câu đi trong tin nhắn dữ liệu riêng), chạy riêng
+lượt đối chiếu trên 3 sơ đồ Dots 3 ở trên (`.tmp/build/2026-10-23-audit/`): RAG 3 câu, DataSentinel 1, Prism 2.
+
+| Bài | Ô thêm | Soi trước → sau |
+|---|---|---|
+| RAG | 1: "Chỗ lệch: tóm tắt nói 3 tập QA mở, Bảng 1 và §4.1 nói 4", nối vào ô tuyên bố SOTA | 0/4 → 0/4 |
+| DataSentinel | 0 | 1/2 → 1/2 |
+| Prism | 0 | 0/3 → 0/3 |
+
+- Ô thêm ở RAG đúng là một nửa của điểm soi `tqa_not_sota` (tóm tắt nói ba, §4.1 nói bốn), nhưng điểm soi đòi cả hai số
+  của TriviaQA (DPR 57,9 so với RAG 56,8) nên chưa tính. Lượt trước (code chưa sửa, Nemotron) không thêm được ô nào.
+- Kết luận: đối chiếu từng câu giúp ít; điểm soi của `build` bằng model free vẫn là chỗ yếu nhất (1 trên 9, so với 3 trên
+  4 của skill trong Claude Code ở bài Merging).
