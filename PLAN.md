@@ -545,7 +545,7 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper). (23/10; câu cùng vị trí, lệch số câu thì cả đoạn)
 - [x] Sửa, khoá, kéo ô và nút "Dựng sơ đồ" (model :free, xác nhận huấn luyện) ngay trong VietPaper. (23/10)
 - [x] Commit hai repo (23/10: VietPaper `ad091e0`, paper-graph `7658981`; chưa push)
-- [ ] Đưa paper-graph lên TUF (chưa có remote GitHub) rồi `pip install -e` trong venv của VietPaper trên TUF @ban
+- [x] Đưa paper-graph lên TUF rồi `pip install -e` trong venv của VietPaper trên TUF (24/10: repo riêng tư github.com/tdHuy22/paper-graph, TUF ~/claude/paper-graph, VietPaper d55c065, service active)
 - [ ] Dựng thật một bài bằng nút trong VietPaper (OpenRouter free) @usd
 - [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
   model local chưa làm)
