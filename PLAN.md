@@ -218,6 +218,20 @@ python3 -m paper_graph check bench/papers/attention/attention.graph.json        
   "So với dự đoán của bạn" ở thẻ ô con, aria, tương phản nút tối). Cả bộ test đạt (biên nhận); thử lại thư viện hình
   trong trình duyệt. Còn `@ban`: mời người đọc chạy phép đo. Chưa commit (cùng lệnh `build`).
 
+- **Mốc 4 việc 5.1, 5.2** (2026-10-24, xong, chưa commit). 5.1: VietPaper `scripts/live_graph_api.py` dựng thật qua
+  `POST /api/{id}/graph/build` (`source: api`) với dữ liệu tạm, chỉ đọc key OpenRouter đã nhớ (`data/keys.json` không
+  đổi, kiểm bằng SHA). Bài GQA, model mặc định `dots-3-note-preview:free`: lần đầu đạt, 17,2 phút, 21 lượt gọi, 0 USD,
+  36 ô (6 tầng đầu, mỗi ô một tầng dưới 4–8 ô), 51 neo, `check` 0 lỗi, 2 cảnh báo (PG304, PG306), `/graph/view` 200;
+  không gặp 429/502. Kết quả ghi README VietPaper mục "Sơ đồ bài báo". 5.2: `scripts/test_claude.py` thêm claude giả
+  chế độ `flood` (in sự kiện dồn dập 30 giây, có tiến trình con): `run_claude` và `claude_code.events` đều dừng sau
+  2 giây (hạn hạ còn 2), tiến trình con chết, thư mục làm việc xoá; đột biến hạn chót theo từng dòng (cả hai chỗ) và chỉ
+  giết tiến trình chính đều đỏ. `scripts/test_graph_js.mjs` (node `vm`, DOM giả tối thiểu, chạy nguyên graph.js):
+  23 mục cho listener `message` (TM-18); 12 đột biến chốt chặn và biên đều đỏ; `test_graph.py` mục 8 gọi nó nếu có node
+  (TUF không có node: bỏ qua, in rõ). Threat model VietPaper TM-18, TM-22 bỏ câu "chưa có test". Reviewer sonnet: 0
+  cao/vừa, 5 thấp, sửa cả 5 (biên trang 1 và trang cuối, flood cho `events`, luật thử lại của script theo `_retryable`
+  của paper-graph và bỏ qua hết hạn mức ngày, bắt `TimeoutExpired`). Biên nhận: `test_claude`, `test_graph`,
+  `test_security`, `node scripts/test_graph_js.mjs` đạt.
+
 ### Việc tiếp theo
 
 Bạn chốt 2026-10-16 (trang https://claude.ai/artifact/JbS5XBzaztdKAdDWLL2AMu): tích hợp đầy đủ vào VietPaper, VietPaper
@@ -557,8 +571,10 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Đưa paper-graph lên TUF rồi `pip install -e` trong venv của VietPaper trên TUF (24/10: repo riêng tư github.com/tdHuy22/paper-graph, TUF ~/claude/paper-graph, VietPaper d55c065, service active)
 - [x] Dựng bằng agent Claude Code (Opus, skill dung-so-do) từ nút ✳️ Claude trong VietPaper (24/10: GQA, Attention đạt;
   cổng `pg_gate.py`, threat model VietPaper TM-19..23)
-- [ ] Dựng thật một bài bằng nút 🌐 API trong VietPaper (OpenRouter free) @usd
-- [ ] Test tự động: hạn chót 45 phút của `graphs.run_claude`, listener postMessage của `static/graph.js` (TM-18; mới thử tay)
+- [x] Dựng thật một bài bằng nút 🌐 API trong VietPaper (OpenRouter free) (24/10: GQA, `scripts/live_graph_api.py`, 17 phút,
+  21 lượt free, 36 ô, check 0 lỗi 2 cảnh báo)
+- [x] Test tự động: hạn chót 45 phút của `graphs.run_claude`, listener postMessage của `static/graph.js` (24/10:
+  `test_claude.py` claude giả chế độ flood; `test_graph_js.mjs` bằng node, DOM giả; đột biến đều đỏ)
 - [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
   model local chưa làm)
 
