@@ -4,7 +4,7 @@ Mô tả sản phẩm ở [README.md](README.md); file này chỉ ghi trạng th
 
 ## §0 Đang ở đâu, việc tiếp theo
 
-Cập nhật 2026-10-23.
+Cập nhật 2026-10-24.
 
 ### Đã xong, có bằng chứng
 
@@ -467,7 +467,16 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     trình duyệt), dựng lại không đạt thì đặt lại blocks/ids cũ (`keep_old`/`restore`, job chỉ báo xong sau đó), threat
     model ghi đúng và TM-14..18 `đã có`. Chạy lại (biên nhận): 293 test, test_graph (thêm 4 mục), test_security,
     smoke_features, test_skip đạt. Đã commit (VietPaper `ad091e0`, paper-graph `7658981`, chưa push). Còn: đưa lên TUF: paper-graph chưa có remote GitHub nên TUF
-    chưa lấy được (@ban: tạo repo riêng tư hay cách khác).
+    chưa lấy được (@ban: tạo repo riêng tư hay cách khác). → Đã làm 24/10 (mục 24).
+24. **Lên TUF, dựng bằng Claude Code, đo dịch** (2026-10-24, xong, đã push). Repo riêng tư
+    https://github.com/tdHuy22/paper-graph; TUF clone `~/claude/paper-graph`, `pip install -e` trong venv VietPaper,
+    service chạy. VietPaper thêm Claude Code làm nhà cung cấp model (`claude_code.py`, commit `d55c065`, `f99c0e3`):
+    nút 🌐 API | ✳️ Claude Code; tab Sơ đồ có nút ✳️ Claude | 🌐 API — ✳️ Claude chạy skill dung-so-do bằng agent Opus
+    5.5 qua `claude -p` trong thư mục làm việc tạm, `--safe-mode --restricted dontAsk`, shell chỉ qua cổng `pg_gate.py`
+    (`python -I`, khuôn tham số cố định: differential-review tìm và tái hiện đòn gói `paper_graph/` giả qua `python -m`),
+    kiểm lại theo bản gốc rồi mới chép. Đo thật: GQA 31–33 ô (5 phút), Attention 44 ô (6,5 phút), đạt. `scripts/live_claude.py`
+    trên TUF: mọi tính năng đạt. Bench dịch (`5ec39a5`): Claude Haiku ≈ Sonnet ≫ Nemotron free > Google (hai trọng
+    tài Opus, gpt-6-luna). Claude Code trên TUF: `~/.local/bin/claude`, đã đăng nhập.
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
 
@@ -546,7 +555,10 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Sửa, khoá, kéo ô và nút "Dựng sơ đồ" (model :free, xác nhận huấn luyện) ngay trong VietPaper. (23/10)
 - [x] Commit hai repo (23/10: VietPaper `ad091e0`, paper-graph `7658981`; chưa push)
 - [x] Đưa paper-graph lên TUF rồi `pip install -e` trong venv của VietPaper trên TUF (24/10: repo riêng tư github.com/tdHuy22/paper-graph, TUF ~/claude/paper-graph, VietPaper d55c065, service active)
-- [ ] Dựng thật một bài bằng nút trong VietPaper (OpenRouter free) @usd
+- [x] Dựng bằng agent Claude Code (Opus, skill dung-so-do) từ nút ✳️ Claude trong VietPaper (24/10: GQA, Attention đạt;
+  cổng `pg_gate.py`, threat model VietPaper TM-19..23)
+- [ ] Dựng thật một bài bằng nút 🌐 API trong VietPaper (OpenRouter free) @usd
+- [ ] Test tự động: hạn chót 45 phút của `graphs.run_claude`, listener postMessage của `static/graph.js` (TM-18; mới thử tay)
 - [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
   model local chưa làm)
 
