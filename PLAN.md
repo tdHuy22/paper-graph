@@ -466,7 +466,7 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
     …), tab nạp lại khung khi số trang đã dịch đổi, `reveal` chỉ khi chọn ô (lưu sửa đổi không cuộn lại bài: kiểm trong
     trình duyệt), dựng lại không đạt thì đặt lại blocks/ids cũ (`keep_old`/`restore`, job chỉ báo xong sau đó), threat
     model ghi đúng và TM-14..18 `đã có`. Chạy lại (biên nhận): 293 test, test_graph (thêm 4 mục), test_security,
-    smoke_features, test_skip đạt. Còn: commit hai repo (@ban), đưa lên TUF: paper-graph chưa có remote GitHub nên TUF
+    smoke_features, test_skip đạt. Đã commit (VietPaper `ad091e0`, paper-graph `7658981`, chưa push). Còn: đưa lên TUF: paper-graph chưa có remote GitHub nên TUF
     chưa lấy được (@ban: tạo repo riêng tư hay cách khác).
 
 ### Quyết định đã chốt (bạn chốt 2026-10-12: "chốt hết", theo phương án khuyên)
@@ -544,7 +544,7 @@ dùng paper-graph như thư viện (đổi Q1); chờ phiên khác đang sửa V
 - [x] Tab "Sơ đồ" cạnh bản dịch; bấm ô thì cuộn hai khung tới đúng đoạn. (23/10, VietPaper `graphs.py`, `static/graph.js`)
 - [x] Thẻ chi tiết của trình xem có bản dịch của câu trích (lấy từ VietPaper). (23/10; câu cùng vị trí, lệch số câu thì cả đoạn)
 - [x] Sửa, khoá, kéo ô và nút "Dựng sơ đồ" (model :free, xác nhận huấn luyện) ngay trong VietPaper. (23/10)
-- [ ] Commit hai repo @ban
+- [x] Commit hai repo (23/10: VietPaper `ad091e0`, paper-graph `7658981`; chưa push)
 - [ ] Đưa paper-graph lên TUF (chưa có remote GitHub) rồi `pip install -e` trong venv của VietPaper trên TUF @ban
 - [ ] Dựng thật một bài bằng nút trong VietPaper (OpenRouter free) @usd
 - [x] Bước dựng bằng API (model local hay OpenRouter) cho người không dùng Claude Code. (`paper_graph build`, OpenRouter;
