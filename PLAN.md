@@ -46,6 +46,12 @@ Cập nhật 2026-10-24.
   (8 bỏ qua vì thiếu VietPaper); tái hiện: `extract` bài Attention, `check --pdf --strict` 0 lỗi, `verify-blocks`
   khớp trên cả ba bài, và bắt được blocks sửa tay (2 chỗ khác, mã 1).
 
+- **Sau Mốc 4 (24/10, đang làm, chưa commit):** VietPaper cho chọn model khi dựng sơ đồ bằng Claude (Opus mặc định, Sonnet
+  nhanh hơn; route từ chối model ngoài danh sách; test_claude đạt). Đo khởi động `claude -p` trên TUF: ~1,7 giây/lượt (chat
+  30–40% thời gian, dịch 10–15%); khởi động sẵn tiến trình là đánh đổi (system prompt phải vào tin nhắn) — chờ bạn quyết.
+  Dựng bằng Claude (Opus) qua cổng: bản scan GQA 35 ô (5,5 phút), FIDES 40 trang 46 ô (10 phút), cả hai 0 lỗi. Reviewer
+  sonnet phần chọn model: 0 lỗi. test_claude, test_graph, test_security đạt (biên nhận).
+
 ### Mốc kiểm tra
 
 ```bash
