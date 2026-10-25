@@ -143,3 +143,7 @@ Lõi (`check`) chỉ dùng thư viện chuẩn của Python 3.11. Định dạng
 ## Trạng thái
 
 Mốc 4 (gắn vào VietPaper). Xem [PLAN.md](PLAN.md) §0.
+
+## Giấy phép
+
+GNU AGPL-3.0, xem [LICENSE](LICENSE). Báo lỗi bảo mật: [SECURITY.md](SECURITY.md).

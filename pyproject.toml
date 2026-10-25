@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,7 @@ name = "paper-graph"
 version = "0.1.0"
 description = "Sơ đồ nhiều tầng cho bài báo, mỗi ô neo về đúng câu trong bài"
 requires-python = ">=3.11"
+license = "AGPL-3.0-only"
 dependencies = []  # lõi chỉ dùng thư viện chuẩn; extract, figure cần PyMuPDF của VietPaper
 
 [tool.setuptools]
